@@ -5,6 +5,7 @@ type RoundType = "tap" | "wait";
 type RoundResult = "success" | "fail" | null;
 type Difficulty = "easy" | "normal" | "hard";
 type TutorialStep = 0 | 1 | 2 | 3 | 4;
+type PowerUpType = "time_freeze" | "double_points" | "extra_life";
 
 interface LeaderboardEntry {
   name: string;
@@ -14,10 +15,28 @@ interface LeaderboardEntry {
   date: string;
 }
 
-const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; baseTime: number; minTime: number; decay: number; fakeAfterRound: number; fakeChance: number }> = {
-  easy: { label: "EASY", baseTime: 3000, minTime: 1200, decay: 60, fakeAfterRound: 5, fakeChance: 0.3 },
-  normal: { label: "NORMAL", baseTime: 2000, minTime: 800, decay: 80, fakeAfterRound: 3, fakeChance: 0.5 },
-  hard: { label: "HARD", baseTime: 1400, minTime: 500, decay: 100, fakeAfterRound: 1, fakeChance: 0.7 },
+interface ActivePowerUp {
+  type: PowerUpType;
+  roundsLeft: number;
+}
+
+interface PowerUpPickup {
+  type: PowerUpType;
+  x: number;
+  y: number;
+  id: number;
+}
+
+const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; baseTime: number; minTime: number; decay: number; fakeAfterRound: number; fakeChance: number; powerUpChance: number }> = {
+  easy: { label: "EASY", baseTime: 3000, minTime: 1200, decay: 60, fakeAfterRound: 5, fakeChance: 0.3, powerUpChance: 0.25 },
+  normal: { label: "NORMAL", baseTime: 2000, minTime: 800, decay: 80, fakeAfterRound: 3, fakeChance: 0.5, powerUpChance: 0.18 },
+  hard: { label: "HARD", baseTime: 1400, minTime: 500, decay: 100, fakeAfterRound: 1, fakeChance: 0.7, powerUpChance: 0.12 },
+};
+
+const POWER_UP_CONFIG: Record<PowerUpType, { label: string; icon: string; color: string; desc: string; duration: number }> = {
+  time_freeze: { label: "TIME FREEZE", icon: "❄️", color: "hsl(200 100% 70%)", desc: "+50% time", duration: 3 },
+  double_points: { label: "2× POINTS", icon: "⚡", color: "hsl(45 100% 55%)", desc: "Double score", duration: 3 },
+  extra_life: { label: "EXTRA LIFE", icon: "💜", color: "hsl(320 100% 60%)", desc: "Survive 1 fail", duration: 1 },
 };
 
 const PROMPTS_TAP = ["TAP NOW!", "HIT IT!", "SMASH!", "GO GO GO!", "STRIKE!", "QUICK!"];
@@ -29,19 +48,16 @@ function getRandomItem<T>(arr: T[]): T {
 }
 
 function vibrate(pattern: number | number[]) {
-  if (navigator.vibrate) {
-    navigator.vibrate(pattern);
-  }
+  if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
-function playSound(type: "success" | "fail" | "tap" | "combo") {
+function playSound(type: "success" | "fail" | "tap" | "combo" | "powerup") {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);
     gain.connect(ctx.destination);
-
     switch (type) {
       case "success":
         osc.type = "sine";
@@ -50,8 +66,7 @@ function playSound(type: "success" | "fail" | "tap" | "combo") {
         osc.frequency.setValueAtTime(784, ctx.currentTime + 0.16);
         gain.gain.setValueAtTime(0.15, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.35);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.35);
         break;
       case "fail":
         osc.type = "sawtooth";
@@ -59,16 +74,14 @@ function playSound(type: "success" | "fail" | "tap" | "combo") {
         osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.4);
         gain.gain.setValueAtTime(0.12, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.4);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
         break;
       case "tap":
         osc.type = "sine";
         osc.frequency.setValueAtTime(880, ctx.currentTime);
         gain.gain.setValueAtTime(0.08, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.06);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.06);
         break;
       case "combo":
         osc.type = "sine";
@@ -77,31 +90,28 @@ function playSound(type: "success" | "fail" | "tap" | "combo") {
         osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.12);
         gain.gain.setValueAtTime(0.12, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime);
-        osc.stop(ctx.currentTime + 0.25);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25);
+        break;
+      case "powerup":
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(440, ctx.currentTime);
+        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.05);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
+        osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.15);
+        gain.gain.setValueAtTime(0.15, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
         break;
     }
   } catch {}
 }
 
-// Particle system
 interface Particle {
-  id: number;
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  life: number;
-  color: string;
-  size: number;
+  id: number; x: number; y: number; vx: number; vy: number; life: number; color: string; size: number;
 }
 
 function getLeaderboard(): LeaderboardEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem("tapOrWait_leaderboard") || "[]");
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem("tapOrWait_leaderboard") || "[]"); } catch { return []; }
 }
 
 function saveToLeaderboard(entry: LeaderboardEntry) {
@@ -124,7 +134,7 @@ const TUTORIAL_STEPS = [
   { title: "TAP ROUNDS", desc: "When you see a CYAN circle,\nTAP anywhere as fast as you can!", action: "TAP TO PRACTICE", type: "tap" as const },
   { title: "WAIT ROUNDS", desc: "When you see a GOLD circle,\nDON'T TAP. Just wait it out.", action: "WAIT TO PRACTICE", type: "wait" as const },
   { title: "FAKE OUTS!", desc: "Watch out for tricky prompts!\nThey look like TAP but aren't.", action: "GOT IT" },
-  { title: "READY?", desc: "Combos multiply your score.\nOne wrong move = Game Over.", action: "START PLAYING" },
+  { title: "READY?", desc: "Combos multiply your score.\nPower-ups appear randomly!\nOne wrong move = Game Over.", action: "START PLAYING" },
 ];
 
 export default function TapOrWaitGame() {
@@ -135,9 +145,7 @@ export default function TapOrWaitGame() {
   const [combo, setCombo] = useState(0);
   const [maxCombo, setMaxCombo] = useState(0);
   const [comboFlash, setComboFlash] = useState(false);
-  const [highScore, setHighScore] = useState(() => {
-    return parseInt(localStorage.getItem("tapOrWait_highScore") || "0");
-  });
+  const [highScore, setHighScore] = useState(() => parseInt(localStorage.getItem("tapOrWait_highScore") || "0"));
   const [roundType, setRoundType] = useState<RoundType>("tap");
   const [prompt, setPrompt] = useState("");
   const [roundResult, setRoundResult] = useState<RoundResult>(null);
@@ -154,14 +162,32 @@ export default function TapOrWaitGame() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard());
   const [playerName, setPlayerName] = useState("");
   const [showNameInput, setShowNameInput] = useState(false);
+
+  // Power-up state
+  const [activePowerUps, setActivePowerUps] = useState<ActivePowerUp[]>([]);
+  const [powerUpPickups, setPowerUpPickups] = useState<PowerUpPickup[]>([]);
+  const [extraLives, setExtraLives] = useState(0);
+  const [powerUpNotice, setPowerUpNotice] = useState<string | null>(null);
+
   const particleIdRef = useRef(0);
+  const pickupIdRef = useRef(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fakeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const roundStartRef = useRef(0);
 
   const config = DIFFICULTY_CONFIG[difficulty];
-  const maxTime = Math.max(config.baseTime - round * config.decay, config.minTime);
+
+  const hasActivePowerUp = useCallback((type: PowerUpType) => {
+    return activePowerUps.some(p => p.type === type);
+  }, [activePowerUps]);
+
+  const getMaxTime = useCallback((currentRound: number) => {
+    const base = Math.max(config.baseTime - currentRound * config.decay, config.minTime);
+    return hasActivePowerUp("time_freeze") ? Math.floor(base * 1.5) : base;
+  }, [config, hasActivePowerUp]);
+
+  const maxTime = getMaxTime(round);
 
   const clearAllTimers = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -169,64 +195,99 @@ export default function TapOrWaitGame() {
     if (fakeTimerRef.current) clearTimeout(fakeTimerRef.current);
   }, []);
 
-  // Spawn particles
   const spawnParticles = useCallback((color: string) => {
     const newParticles: Particle[] = [];
     for (let i = 0; i < 12; i++) {
       const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
       newParticles.push({
-        id: particleIdRef.current++,
-        x: 50,
-        y: 50,
+        id: particleIdRef.current++, x: 50, y: 50,
         vx: Math.cos(angle) * (2 + Math.random() * 3),
         vy: Math.sin(angle) * (2 + Math.random() * 3),
-        life: 1,
-        color,
-        size: 3 + Math.random() * 4,
+        life: 1, color, size: 3 + Math.random() * 4,
       });
     }
     setParticles(prev => [...prev, ...newParticles]);
     setTimeout(() => setParticles([]), 600);
   }, []);
 
-  // Screen shake helper
   const triggerShake = useCallback(() => {
     setScreenShake(true);
     setTimeout(() => setScreenShake(false), 400);
   }, []);
 
+  // Spawn power-up pickup
+  const maybeSpawnPowerUp = useCallback(() => {
+    if (Math.random() > config.powerUpChance) return;
+    const types: PowerUpType[] = ["time_freeze", "double_points", "extra_life"];
+    const type = getRandomItem(types);
+    const pickup: PowerUpPickup = {
+      type, id: pickupIdRef.current++,
+      x: 15 + Math.random() * 70,
+      y: 15 + Math.random() * 50,
+    };
+    setPowerUpPickups(prev => [...prev, pickup]);
+    // Auto-remove after 3 seconds if not collected
+    setTimeout(() => {
+      setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
+    }, 3000);
+  }, [config.powerUpChance]);
+
+  const collectPowerUp = useCallback((pickup: PowerUpPickup) => {
+    setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
+    playSound("powerup");
+    vibrate([20, 10, 20]);
+    const cfg = POWER_UP_CONFIG[pickup.type];
+
+    if (pickup.type === "extra_life") {
+      setExtraLives(prev => prev + 1);
+    } else {
+      setActivePowerUps(prev => {
+        const existing = prev.find(p => p.type === pickup.type);
+        if (existing) {
+          return prev.map(p => p.type === pickup.type ? { ...p, roundsLeft: p.roundsLeft + cfg.duration } : p);
+        }
+        return [...prev, { type: pickup.type, roundsLeft: cfg.duration }];
+      });
+    }
+
+    setPowerUpNotice(`${cfg.icon} ${cfg.label}`);
+    setTimeout(() => setPowerUpNotice(null), 1200);
+    spawnParticles(cfg.color);
+  }, [spawnParticles]);
+
+  // Tick down power-up durations after each round
+  const tickPowerUps = useCallback(() => {
+    setActivePowerUps(prev =>
+      prev.map(p => ({ ...p, roundsLeft: p.roundsLeft - 1 })).filter(p => p.roundsLeft > 0)
+    );
+  }, []);
+
   const startGame = () => {
-    setScore(0);
-    setRound(0);
-    setCombo(0);
-    setMaxCombo(0);
-    setShowNameInput(false);
-    setPhase("countdown");
-    setCountdown(3);
+    setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
+    setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
+    setExtraLives(0); setPowerUpNotice(null);
+    setPhase("countdown"); setCountdown(3);
   };
 
   // Countdown
   useEffect(() => {
     if (phase !== "countdown") return;
-    if (countdown <= 0) {
-      startRound(0);
-      return;
-    }
+    if (countdown <= 0) { startRound(0); return; }
     const t = setTimeout(() => setCountdown(c => c - 1), 700);
     return () => clearTimeout(t);
   }, [phase, countdown]);
 
   const startRound = useCallback((currentRound: number) => {
     clearAllTimers();
-    setTapped(false);
-    setRoundResult(null);
-    setShowFake(false);
-    setComboFlash(false);
+    setTapped(false); setRoundResult(null); setShowFake(false); setComboFlash(false);
 
     const type: RoundType = Math.random() > 0.45 ? "tap" : "wait";
     setRoundType(type);
 
-    const time = Math.max(config.baseTime - currentRound * config.decay, config.minTime);
+    const time = getMaxTime(currentRound);
+
+    // Maybe spawn a power-up
+    if (currentRound > 1) maybeSpawnPowerUp();
 
     if (currentRound > config.fakeAfterRound && Math.random() < config.fakeChance) {
       setPrompt(getRandomItem(FAKE_PROMPTS));
@@ -239,7 +300,6 @@ export default function TapOrWaitGame() {
         setPrompt(type === "tap" ? getRandomItem(PROMPTS_TAP) : getRandomItem(PROMPTS_WAIT));
         roundStartRef.current = Date.now();
         setTimeLeft(time);
-
         if (type === "tap") {
           timerRef.current = setTimeout(() => handleRoundEnd(false, currentRound), time);
         } else {
@@ -251,45 +311,41 @@ export default function TapOrWaitGame() {
       setPhase("playing");
       roundStartRef.current = Date.now();
       setTimeLeft(time);
-
       if (type === "tap") {
         timerRef.current = setTimeout(() => handleRoundEnd(false, currentRound), time);
       } else {
         waitTimerRef.current = setTimeout(() => handleRoundEnd(true, currentRound), time);
       }
     }
-  }, [clearAllTimers, config]);
+  }, [clearAllTimers, config, getMaxTime, maybeSpawnPowerUp]);
 
   const handleRoundEnd = useCallback((success: boolean, currentRound: number) => {
     clearAllTimers();
+    setPowerUpPickups([]); // Clear uncollected pickups
+
     if (success) {
       const reaction = Date.now() - roundStartRef.current;
       const bonus = Math.max(0, Math.floor((2000 - reaction) / 10));
-      
+      const doubleActive = hasActivePowerUp("double_points");
+
       setCombo(prev => {
         const newCombo = prev + 1;
         const multiplier = Math.min(1 + (newCombo - 1) * 0.25, 4);
-        const points = Math.floor((100 + bonus) * multiplier);
+        let points = Math.floor((100 + bonus) * multiplier);
+        if (doubleActive) points *= 2;
         setLastPoints(points);
         setScore(s => s + points);
-        
         if (newCombo > 1) {
           setComboFlash(true);
-          if (newCombo >= 5) playSound("combo");
-          else playSound("success");
-        } else {
-          playSound("success");
-        }
-        
+          if (newCombo >= 5) playSound("combo"); else playSound("success");
+        } else playSound("success");
         if (newCombo > maxCombo) setMaxCombo(newCombo);
         return newCombo;
       });
-      
-      vibrate(30);
-      triggerShake();
-      spawnParticles("hsl(174 100% 50%)");
-      setRoundResult("success");
-      setPhase("result");
+
+      vibrate(30); triggerShake(); spawnParticles("hsl(174 100% 50%)");
+      setRoundResult("success"); setPhase("result");
+      tickPowerUps();
 
       setTimeout(() => {
         const nextRound = currentRound + 1;
@@ -297,54 +353,60 @@ export default function TapOrWaitGame() {
         startRound(nextRound);
       }, 800);
     } else {
-      playSound("fail");
-      vibrate([50, 30, 50, 30, 80]);
-      triggerShake();
-      spawnParticles("hsl(0 85% 55%)");
-      setCombo(0);
-      setRoundResult("fail");
-      setPhase("gameover");
+      // Check extra life
+      if (extraLives > 0) {
+        setExtraLives(prev => prev - 1);
+        playSound("powerup");
+        vibrate([20, 10, 20, 10, 20]);
+        setPowerUpNotice("💜 EXTRA LIFE USED!");
+        setTimeout(() => setPowerUpNotice(null), 1200);
+        spawnParticles("hsl(320 100% 60%)");
+        setCombo(0);
+        setRoundResult("fail");
+        setPhase("result");
+        tickPowerUps();
+
+        setTimeout(() => {
+          const nextRound = currentRound + 1;
+          setRound(nextRound);
+          startRound(nextRound);
+        }, 1000);
+        return;
+      }
+
+      playSound("fail"); vibrate([50, 30, 50, 30, 80]);
+      triggerShake(); spawnParticles("hsl(0 85% 55%)");
+      setCombo(0); setRoundResult("fail"); setPhase("gameover");
       setScore(prev => {
         if (prev > highScore) {
           setHighScore(prev);
           localStorage.setItem("tapOrWait_highScore", prev.toString());
         }
-        if (isLeaderboardWorthy(prev)) {
-          setShowNameInput(true);
-        }
+        if (isLeaderboardWorthy(prev)) setShowNameInput(true);
         return prev;
       });
     }
-  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles]);
+  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles, tickPowerUps, hasActivePowerUp, extraLives]);
 
   const handleTap = useCallback(() => {
     if (phase !== "playing" || tapped) return;
-    setTapped(true);
-    vibrate(15);
-    playSound("tap");
-
-    if (showFake) {
-      handleRoundEnd(false, round);
-      return;
-    }
-
-    if (roundType === "tap") {
-      handleRoundEnd(true, round);
-    } else {
-      handleRoundEnd(false, round);
-    }
+    setTapped(true); vibrate(15); playSound("tap");
+    if (showFake) { handleRoundEnd(false, round); return; }
+    if (roundType === "tap") handleRoundEnd(true, round);
+    else handleRoundEnd(false, round);
   }, [phase, tapped, showFake, roundType, round, handleRoundEnd]);
 
   // Timer bar
   useEffect(() => {
     if (phase !== "playing" || showFake) return;
+    const curMaxTime = getMaxTime(round);
     const interval = setInterval(() => {
       const elapsed = Date.now() - roundStartRef.current;
-      const remaining = Math.max(0, maxTime - elapsed);
+      const remaining = Math.max(0, curMaxTime - elapsed);
       setTimeLeft(remaining);
     }, 30);
     return () => clearInterval(interval);
-  }, [phase, showFake, maxTime]);
+  }, [phase, showFake, round, getMaxTime]);
 
   useEffect(() => {
     if (phase === "gameover" && score > highScore) {
@@ -357,9 +419,7 @@ export default function TapOrWaitGame() {
   useEffect(() => {
     if (phase === "tutorial" && tutorialStep === 2 && !tutorialWaitDone) {
       const t = setTimeout(() => {
-        setTutorialWaitDone(true);
-        playSound("success");
-        vibrate(30);
+        setTutorialWaitDone(true); playSound("success"); vibrate(30);
       }, 2000);
       return () => clearTimeout(t);
     }
@@ -370,9 +430,7 @@ export default function TapOrWaitGame() {
     if (particles.length === 0) return;
     const interval = setInterval(() => {
       setParticles(prev =>
-        prev
-          .map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.05, vy: p.vy + 0.1 }))
-          .filter(p => p.life > 0)
+        prev.map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.05, vy: p.vy + 0.1 })).filter(p => p.life > 0)
       );
     }, 30);
     return () => clearInterval(interval);
@@ -381,14 +439,10 @@ export default function TapOrWaitGame() {
   const handleSaveScore = () => {
     const name = playerName.trim() || "ANON";
     const updated = saveToLeaderboard({
-      name: name.toUpperCase().slice(0, 10),
-      score,
-      difficulty,
-      maxCombo,
+      name: name.toUpperCase().slice(0, 10), score, difficulty, maxCombo,
       date: new Date().toLocaleDateString(),
     });
-    setLeaderboard(updated);
-    setShowNameInput(false);
+    setLeaderboard(updated); setShowNameInput(false);
   };
 
   const timerPercent = maxTime > 0 ? (timeLeft / maxTime) * 100 : 0;
@@ -399,22 +453,51 @@ export default function TapOrWaitGame() {
       className={`fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden transition-transform duration-75 ${screenShake ? "animate-shake" : ""}`}
       onPointerDown={phase === "playing" ? handleTap : undefined}
     >
+      {/* Retro grid background */}
+      <div className="retro-grid" />
+      {/* Scanline overlay */}
+      <div className="scanlines" />
+
       {/* Particles */}
       {particles.map(p => (
         <div
           key={p.id}
           className="absolute rounded-full pointer-events-none z-20"
           style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
-            backgroundColor: p.color,
-            opacity: p.life,
+            left: `${p.x}%`, top: `${p.y}%`, width: p.size, height: p.size,
+            backgroundColor: p.color, opacity: p.life,
             boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
           }}
         />
       ))}
+
+      {/* Power-up pickups */}
+      {powerUpPickups.map(pickup => (
+        <div
+          key={pickup.id}
+          className="absolute z-30 cursor-pointer animate-pulse-ring"
+          style={{ left: `${pickup.x}%`, top: `${pickup.y}%` }}
+          onPointerDown={(e) => { e.stopPropagation(); collectPowerUp(pickup); }}
+        >
+          <div
+            className="w-12 h-12 rounded-full flex items-center justify-center text-xl border-2 backdrop-blur-sm"
+            style={{
+              backgroundColor: `${POWER_UP_CONFIG[pickup.type].color.replace(")", " / 0.2)")}`,
+              borderColor: POWER_UP_CONFIG[pickup.type].color,
+              boxShadow: `0 0 15px ${POWER_UP_CONFIG[pickup.type].color}, 0 0 30px ${POWER_UP_CONFIG[pickup.type].color.replace(")", " / 0.3)")}`,
+            }}
+          >
+            {POWER_UP_CONFIG[pickup.type].icon}
+          </div>
+        </div>
+      ))}
+
+      {/* Power-up notice */}
+      {powerUpNotice && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 font-display text-sm font-bold text-foreground animate-float-up px-4 py-2 rounded-lg bg-card/80 border border-border backdrop-blur-sm">
+          {powerUpNotice}
+        </div>
+      )}
 
       {/* Ambient glow */}
       <div className="absolute inset-0 pointer-events-none">
@@ -423,12 +506,8 @@ export default function TapOrWaitGame() {
           style={{
             backgroundColor:
               phase === "playing" && !showFake
-                ? roundType === "tap"
-                  ? "hsl(174 100% 50%)"
-                  : "hsl(45 100% 55%)"
-                : phase === "gameover"
-                ? "hsl(0 85% 55%)"
-                : "hsl(320 100% 60%)",
+                ? roundType === "tap" ? "hsl(174 100% 50%)" : "hsl(45 100% 55%)"
+                : phase === "gameover" ? "hsl(0 85% 55%)" : "hsl(320 100% 60%)",
           }}
         />
       </div>
@@ -443,6 +522,29 @@ export default function TapOrWaitGame() {
             <div className="font-display text-[10px] text-muted-foreground uppercase tracking-wider">
               {config.label}
             </div>
+            {/* Active power-ups indicator */}
+            {(activePowerUps.length > 0 || extraLives > 0) && (
+              <div className="flex gap-1 mt-1">
+                {activePowerUps.map(p => (
+                  <span
+                    key={p.type}
+                    className="text-[10px] font-display px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: `${POWER_UP_CONFIG[p.type].color.replace(")", " / 0.2)")}`,
+                      color: POWER_UP_CONFIG[p.type].color,
+                      border: `1px solid ${POWER_UP_CONFIG[p.type].color.replace(")", " / 0.4)")}`,
+                    }}
+                  >
+                    {POWER_UP_CONFIG[p.type].icon}{p.roundsLeft}
+                  </span>
+                ))}
+                {extraLives > 0 && (
+                  <span className="text-[10px] font-display px-1.5 py-0.5 rounded bg-secondary/20 text-secondary border border-secondary/40">
+                    💜{extraLives}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1">
             <div className="font-display text-sm text-primary text-glow-cyan">
@@ -451,6 +553,11 @@ export default function TapOrWaitGame() {
             {combo > 1 && (
               <div className={`font-display text-[10px] text-accent text-glow-gold transition-all ${comboFlash ? "scale-125" : ""}`}>
                 {combo}x COMBO • {comboMultiplier.toFixed(2)}×
+              </div>
+            )}
+            {hasActivePowerUp("double_points") && (
+              <div className="font-display text-[10px] text-accent text-glow-gold animate-pulse">
+                ⚡ 2× ACTIVE
               </div>
             )}
           </div>
@@ -465,10 +572,10 @@ export default function TapOrWaitGame() {
             style={{
               width: `${timerPercent}%`,
               backgroundColor:
-                timerPercent > 50
-                  ? "hsl(174 100% 50%)"
-                  : timerPercent > 25
-                  ? "hsl(45 100% 55%)"
+                hasActivePowerUp("time_freeze")
+                  ? "hsl(200 100% 70%)"
+                  : timerPercent > 50 ? "hsl(174 100% 50%)"
+                  : timerPercent > 25 ? "hsl(45 100% 55%)"
                   : "hsl(0 85% 55%)",
             }}
           />
@@ -485,7 +592,7 @@ export default function TapOrWaitGame() {
             or WAIT
           </div>
           <p className="text-muted-foreground text-center text-sm max-w-xs leading-relaxed mt-1">
-            React to prompts. Tap when told. Wait when warned. One wrong move and it's over.
+            React to prompts. Tap when told. Wait when warned. Collect power-ups. One wrong move and it's over.
           </p>
 
           {/* Difficulty selector */}
@@ -496,10 +603,8 @@ export default function TapOrWaitGame() {
                 onClick={() => setDifficulty(d)}
                 className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
                   difficulty === d
-                    ? d === "easy"
-                      ? "bg-game-success/20 text-game-success border border-game-success/50"
-                      : d === "normal"
-                      ? "bg-primary/20 text-primary border border-primary/50 glow-cyan"
+                    ? d === "easy" ? "bg-game-success/20 text-game-success border border-game-success/50"
+                      : d === "normal" ? "bg-primary/20 text-primary border border-primary/50 glow-cyan"
                       : "bg-destructive/20 text-destructive border border-destructive/50"
                     : "bg-muted text-muted-foreground border border-border hover:border-foreground/30"
                 }`}
@@ -552,21 +657,15 @@ export default function TapOrWaitGame() {
             {TUTORIAL_STEPS[tutorialStep].desc}
           </p>
 
-          {/* Interactive tutorial steps */}
           {tutorialStep === 1 && (
             <div
               className={`w-32 h-32 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${
-                tutorialTapped
-                  ? "bg-game-success/20 border-game-success scale-110"
-                  : "bg-primary/20 border-primary glow-cyan animate-pulse-ring"
+                tutorialTapped ? "bg-game-success/20 border-game-success scale-110" : "bg-primary/20 border-primary glow-cyan animate-pulse-ring"
               }`}
               onPointerDown={() => {
                 if (!tutorialTapped) {
-                  setTutorialTapped(true);
-                  playSound("success");
-                  vibrate(30);
-                  triggerShake();
-                  spawnParticles("hsl(174 100% 50%)");
+                  setTutorialTapped(true); playSound("success"); vibrate(30);
+                  triggerShake(); spawnParticles("hsl(174 100% 50%)");
                 }
               }}
             >
@@ -579,15 +678,11 @@ export default function TapOrWaitGame() {
           {tutorialStep === 2 && (
             <div
               className={`w-32 h-32 rounded-full border-2 flex items-center justify-center transition-all ${
-                tutorialWaitDone
-                  ? "bg-game-success/20 border-game-success scale-110"
-                  : "bg-accent/10 border-accent glow-gold"
+                tutorialWaitDone ? "bg-game-success/20 border-game-success scale-110" : "bg-accent/10 border-accent glow-gold"
               }`}
               onPointerDown={() => {
                 if (!tutorialWaitDone) {
-                  playSound("fail");
-                  vibrate([50, 30, 50]);
-                  triggerShake();
+                  playSound("fail"); vibrate([50, 30, 50]); triggerShake();
                   spawnParticles("hsl(0 85% 55%)");
                 }
               }}
@@ -610,10 +705,7 @@ export default function TapOrWaitGame() {
             onClick={() => {
               if (tutorialStep === 1 && !tutorialTapped) return;
               if (tutorialStep === 2 && !tutorialWaitDone) return;
-              if (tutorialStep >= 4) {
-                setPhase("menu");
-                return;
-              }
+              if (tutorialStep >= 4) { setPhase("menu"); return; }
               const next = (tutorialStep + 1) as TutorialStep;
               setTutorialStep(next);
               if (next === 2) setTutorialWaitDone(false);
@@ -641,10 +733,7 @@ export default function TapOrWaitGame() {
       {/* COUNTDOWN */}
       {phase === "countdown" && (
         <div className="flex items-center justify-center z-10">
-          <span
-            key={countdown}
-            className="font-display font-black text-8xl text-primary text-glow-cyan animate-countdown-pulse"
-          >
+          <span key={countdown} className="font-display font-black text-8xl text-primary text-glow-cyan animate-countdown-pulse">
             {countdown || "GO!"}
           </span>
         </div>
@@ -676,6 +765,9 @@ export default function TapOrWaitGame() {
               <p className="text-accent/60 text-xs font-display">DON'T TAP</p>
             </>
           )}
+          {hasActivePowerUp("time_freeze") && (
+            <div className="font-display text-[10px] text-[hsl(200_100%_70%)] animate-pulse">❄️ TIME SLOWED</div>
+          )}
         </div>
       )}
 
@@ -687,7 +779,7 @@ export default function TapOrWaitGame() {
           </span>
           {lastPoints > 0 && (
             <span className="font-display text-sm text-primary text-glow-cyan animate-float-up">
-              +{lastPoints}
+              +{lastPoints}{hasActivePowerUp("double_points") ? " ⚡" : ""}
             </span>
           )}
           {combo > 1 && (
@@ -722,41 +814,30 @@ export default function TapOrWaitGame() {
             Survived {round} round{round !== 1 ? "s" : ""} on {config.label}
           </div>
 
-          {/* Name input for leaderboard */}
           {showNameInput && (
             <div className="flex flex-col items-center gap-2 mt-2">
               <span className="font-display text-xs text-primary text-glow-cyan">NEW HIGH SCORE! ENTER NAME:</span>
               <div className="flex gap-2">
                 <input
-                  type="text"
-                  value={playerName}
-                  onChange={e => setPlayerName(e.target.value)}
-                  maxLength={10}
-                  placeholder="YOUR NAME"
+                  type="text" value={playerName} onChange={e => setPlayerName(e.target.value)}
+                  maxLength={10} placeholder="YOUR NAME"
                   className="px-3 py-2 bg-card border border-border rounded-lg font-display text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary w-32 text-center uppercase"
-                  autoFocus
-                  onKeyDown={e => e.key === "Enter" && handleSaveScore()}
+                  autoFocus onKeyDown={e => e.key === "Enter" && handleSaveScore()}
                 />
-                <button
-                  onClick={handleSaveScore}
-                  className="px-4 py-2 bg-primary text-primary-foreground font-display text-xs font-bold rounded-lg hover:scale-105 active:scale-95 transition-transform"
-                >
+                <button onClick={handleSaveScore}
+                  className="px-4 py-2 bg-primary text-primary-foreground font-display text-xs font-bold rounded-lg hover:scale-105 active:scale-95 transition-transform">
                   SAVE
                 </button>
               </div>
             </div>
           )}
 
-          <button
-            onClick={startGame}
-            className="mt-3 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
-          >
+          <button onClick={startGame}
+            className="mt-3 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform">
             RETRY
           </button>
-          <button
-            onClick={() => setPhase("menu")}
-            className="px-6 py-2 font-display text-xs text-muted-foreground hover:text-foreground transition-colors"
-          >
+          <button onClick={() => setPhase("menu")}
+            className="px-6 py-2 font-display text-xs text-muted-foreground hover:text-foreground transition-colors">
             MENU
           </button>
         </div>
@@ -780,18 +861,13 @@ export default function TapOrWaitGame() {
                 <span className="w-12 text-right">DIFF</span>
               </div>
               {leaderboard.map((entry, i) => (
-                <div
-                  key={i}
+                <div key={i}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg font-display text-xs ${
-                    i === 0
-                      ? "bg-accent/10 border border-accent/30 text-accent"
-                      : i === 1
-                      ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
-                      : i === 2
-                      ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
-                      : "bg-card/50 text-muted-foreground"
-                  }`}
-                >
+                    i === 0 ? "bg-accent/10 border border-accent/30 text-accent"
+                    : i === 1 ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
+                    : i === 2 ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
+                    : "bg-card/50 text-muted-foreground"
+                  }`}>
                   <span className="w-6 font-bold">{i + 1}</span>
                   <span className="flex-1 truncate">{entry.name}</span>
                   <span className="w-16 text-right font-bold">{entry.score}</span>
@@ -801,10 +877,8 @@ export default function TapOrWaitGame() {
               ))}
             </div>
           )}
-          <button
-            onClick={() => setPhase("menu")}
-            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all"
-          >
+          <button onClick={() => setPhase("menu")}
+            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
             BACK
           </button>
         </div>
