@@ -1,9 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-type GamePhase = "menu" | "countdown" | "playing" | "result" | "gameover";
+type GamePhase = "menu" | "tutorial" | "countdown" | "playing" | "result" | "gameover" | "leaderboard";
 type RoundType = "tap" | "wait";
 type RoundResult = "success" | "fail" | null;
 type Difficulty = "easy" | "normal" | "hard";
+type TutorialStep = 0 | 1 | 2 | 3 | 4;
+
+interface LeaderboardEntry {
+  name: string;
+  score: number;
+  difficulty: Difficulty;
+  maxCombo: number;
+  date: string;
+}
 
 const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; baseTime: number; minTime: number; decay: number; fakeAfterRound: number; fakeChance: number }> = {
   easy: { label: "EASY", baseTime: 3000, minTime: 1200, decay: 60, fakeAfterRound: 5, fakeChance: 0.3 },
@@ -19,14 +28,12 @@ function getRandomItem<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-// Haptic feedback helper
 function vibrate(pattern: number | number[]) {
   if (navigator.vibrate) {
     navigator.vibrate(pattern);
   }
 }
 
-// Audio synthesis for sound effects
 function playSound(type: "success" | "fail" | "tap" | "combo") {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -77,6 +84,49 @@ function playSound(type: "success" | "fail" | "tap" | "combo") {
   } catch {}
 }
 
+// Particle system
+interface Particle {
+  id: number;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  life: number;
+  color: string;
+  size: number;
+}
+
+function getLeaderboard(): LeaderboardEntry[] {
+  try {
+    return JSON.parse(localStorage.getItem("tapOrWait_leaderboard") || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveToLeaderboard(entry: LeaderboardEntry) {
+  const board = getLeaderboard();
+  board.push(entry);
+  board.sort((a, b) => b.score - a.score);
+  const top10 = board.slice(0, 10);
+  localStorage.setItem("tapOrWait_leaderboard", JSON.stringify(top10));
+  return top10;
+}
+
+function isLeaderboardWorthy(score: number): boolean {
+  const board = getLeaderboard();
+  if (board.length < 10) return score > 0;
+  return score > board[board.length - 1].score;
+}
+
+const TUTORIAL_STEPS = [
+  { title: "WELCOME", desc: "This game tests your instincts.\nReact fast — but only when told to.", action: "NEXT" },
+  { title: "TAP ROUNDS", desc: "When you see a CYAN circle,\nTAP anywhere as fast as you can!", action: "TAP TO PRACTICE", type: "tap" as const },
+  { title: "WAIT ROUNDS", desc: "When you see a GOLD circle,\nDON'T TAP. Just wait it out.", action: "WAIT TO PRACTICE", type: "wait" as const },
+  { title: "FAKE OUTS!", desc: "Watch out for tricky prompts!\nThey look like TAP but aren't.", action: "GOT IT" },
+  { title: "READY?", desc: "Combos multiply your score.\nOne wrong move = Game Over.", action: "START PLAYING" },
+];
+
 export default function TapOrWaitGame() {
   const [phase, setPhase] = useState<GamePhase>("menu");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
@@ -96,6 +146,15 @@ export default function TapOrWaitGame() {
   const [tapped, setTapped] = useState(false);
   const [showFake, setShowFake] = useState(false);
   const [lastPoints, setLastPoints] = useState(0);
+  const [screenShake, setScreenShake] = useState(false);
+  const [particles, setParticles] = useState<Particle[]>([]);
+  const [tutorialStep, setTutorialStep] = useState<TutorialStep>(0);
+  const [tutorialTapped, setTutorialTapped] = useState(false);
+  const [tutorialWaitDone, setTutorialWaitDone] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard());
+  const [playerName, setPlayerName] = useState("");
+  const [showNameInput, setShowNameInput] = useState(false);
+  const particleIdRef = useRef(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fakeTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -110,11 +169,38 @@ export default function TapOrWaitGame() {
     if (fakeTimerRef.current) clearTimeout(fakeTimerRef.current);
   }, []);
 
+  // Spawn particles
+  const spawnParticles = useCallback((color: string) => {
+    const newParticles: Particle[] = [];
+    for (let i = 0; i < 12; i++) {
+      const angle = (Math.PI * 2 * i) / 12 + Math.random() * 0.5;
+      newParticles.push({
+        id: particleIdRef.current++,
+        x: 50,
+        y: 50,
+        vx: Math.cos(angle) * (2 + Math.random() * 3),
+        vy: Math.sin(angle) * (2 + Math.random() * 3),
+        life: 1,
+        color,
+        size: 3 + Math.random() * 4,
+      });
+    }
+    setParticles(prev => [...prev, ...newParticles]);
+    setTimeout(() => setParticles([]), 600);
+  }, []);
+
+  // Screen shake helper
+  const triggerShake = useCallback(() => {
+    setScreenShake(true);
+    setTimeout(() => setScreenShake(false), 400);
+  }, []);
+
   const startGame = () => {
     setScore(0);
     setRound(0);
     setCombo(0);
     setMaxCombo(0);
+    setShowNameInput(false);
     setPhase("countdown");
     setCountdown(3);
   };
@@ -182,7 +268,7 @@ export default function TapOrWaitGame() {
       
       setCombo(prev => {
         const newCombo = prev + 1;
-        const multiplier = Math.min(1 + (newCombo - 1) * 0.25, 4); // max 4x
+        const multiplier = Math.min(1 + (newCombo - 1) * 0.25, 4);
         const points = Math.floor((100 + bonus) * multiplier);
         setLastPoints(points);
         setScore(s => s + points);
@@ -200,6 +286,8 @@ export default function TapOrWaitGame() {
       });
       
       vibrate(30);
+      triggerShake();
+      spawnParticles("hsl(174 100% 50%)");
       setRoundResult("success");
       setPhase("result");
 
@@ -211,6 +299,8 @@ export default function TapOrWaitGame() {
     } else {
       playSound("fail");
       vibrate([50, 30, 50, 30, 80]);
+      triggerShake();
+      spawnParticles("hsl(0 85% 55%)");
       setCombo(0);
       setRoundResult("fail");
       setPhase("gameover");
@@ -219,10 +309,13 @@ export default function TapOrWaitGame() {
           setHighScore(prev);
           localStorage.setItem("tapOrWait_highScore", prev.toString());
         }
+        if (isLeaderboardWorthy(prev)) {
+          setShowNameInput(true);
+        }
         return prev;
       });
     }
-  }, [clearAllTimers, highScore, startRound, maxCombo]);
+  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles]);
 
   const handleTap = useCallback(() => {
     if (phase !== "playing" || tapped) return;
@@ -260,14 +353,69 @@ export default function TapOrWaitGame() {
     }
   }, [phase, score, highScore]);
 
+  // Tutorial wait practice
+  useEffect(() => {
+    if (phase === "tutorial" && tutorialStep === 2 && !tutorialWaitDone) {
+      const t = setTimeout(() => {
+        setTutorialWaitDone(true);
+        playSound("success");
+        vibrate(30);
+      }, 2000);
+      return () => clearTimeout(t);
+    }
+  }, [phase, tutorialStep, tutorialWaitDone]);
+
+  // Particle animation
+  useEffect(() => {
+    if (particles.length === 0) return;
+    const interval = setInterval(() => {
+      setParticles(prev =>
+        prev
+          .map(p => ({ ...p, x: p.x + p.vx, y: p.y + p.vy, life: p.life - 0.05, vy: p.vy + 0.1 }))
+          .filter(p => p.life > 0)
+      );
+    }, 30);
+    return () => clearInterval(interval);
+  }, [particles.length]);
+
+  const handleSaveScore = () => {
+    const name = playerName.trim() || "ANON";
+    const updated = saveToLeaderboard({
+      name: name.toUpperCase().slice(0, 10),
+      score,
+      difficulty,
+      maxCombo,
+      date: new Date().toLocaleDateString(),
+    });
+    setLeaderboard(updated);
+    setShowNameInput(false);
+  };
+
   const timerPercent = maxTime > 0 ? (timeLeft / maxTime) * 100 : 0;
   const comboMultiplier = Math.min(1 + (combo - 1) * 0.25, 4);
 
   return (
     <div
-      className="fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden"
+      className={`fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden transition-transform duration-75 ${screenShake ? "animate-shake" : ""}`}
       onPointerDown={phase === "playing" ? handleTap : undefined}
     >
+      {/* Particles */}
+      {particles.map(p => (
+        <div
+          key={p.id}
+          className="absolute rounded-full pointer-events-none z-20"
+          style={{
+            left: `${p.x}%`,
+            top: `${p.y}%`,
+            width: p.size,
+            height: p.size,
+            backgroundColor: p.color,
+            opacity: p.life,
+            boxShadow: `0 0 ${p.size * 2}px ${p.color}`,
+          }}
+        />
+      ))}
+
       {/* Ambient glow */}
       <div className="absolute inset-0 pointer-events-none">
         <div
@@ -286,7 +434,7 @@ export default function TapOrWaitGame() {
       </div>
 
       {/* Header */}
-      {phase !== "menu" && (
+      {(phase === "playing" || phase === "result") && (
         <div className="absolute top-6 left-0 right-0 flex justify-between items-start px-6 z-10">
           <div className="flex flex-col gap-1">
             <div className="font-display text-sm text-muted-foreground">
@@ -367,11 +515,126 @@ export default function TapOrWaitGame() {
           >
             PLAY
           </button>
+
+          <div className="flex gap-4">
+            <button
+              onClick={() => { setTutorialStep(0); setTutorialTapped(false); setTutorialWaitDone(false); setPhase("tutorial"); }}
+              className="px-5 py-2 font-display text-xs text-secondary border border-secondary/30 rounded-lg hover:bg-secondary/10 transition-colors"
+            >
+              TUTORIAL
+            </button>
+            <button
+              onClick={() => { setLeaderboard(getLeaderboard()); setPhase("leaderboard"); }}
+              className="px-5 py-2 font-display text-xs text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
+            >
+              LEADERBOARD
+            </button>
+          </div>
+
           {highScore > 0 && (
             <div className="text-accent font-display text-sm text-glow-gold">
               BEST: {highScore}
             </div>
           )}
+        </div>
+      )}
+
+      {/* TUTORIAL */}
+      {phase === "tutorial" && (
+        <div className="flex flex-col items-center gap-6 z-10 px-6 max-w-sm">
+          <div className="font-display text-xs text-muted-foreground tracking-widest">
+            STEP {tutorialStep + 1} / {TUTORIAL_STEPS.length}
+          </div>
+          <h2 className="font-display font-bold text-3xl text-primary text-glow-cyan">
+            {TUTORIAL_STEPS[tutorialStep].title}
+          </h2>
+          <p className="text-foreground/80 text-center text-sm leading-relaxed whitespace-pre-line">
+            {TUTORIAL_STEPS[tutorialStep].desc}
+          </p>
+
+          {/* Interactive tutorial steps */}
+          {tutorialStep === 1 && (
+            <div
+              className={`w-32 h-32 rounded-full border-2 flex items-center justify-center cursor-pointer transition-all ${
+                tutorialTapped
+                  ? "bg-game-success/20 border-game-success scale-110"
+                  : "bg-primary/20 border-primary glow-cyan animate-pulse-ring"
+              }`}
+              onPointerDown={() => {
+                if (!tutorialTapped) {
+                  setTutorialTapped(true);
+                  playSound("success");
+                  vibrate(30);
+                  triggerShake();
+                  spawnParticles("hsl(174 100% 50%)");
+                }
+              }}
+            >
+              <span className="font-display font-bold text-sm text-primary text-glow-cyan">
+                {tutorialTapped ? "NICE!" : "TAP ME"}
+              </span>
+            </div>
+          )}
+
+          {tutorialStep === 2 && (
+            <div
+              className={`w-32 h-32 rounded-full border-2 flex items-center justify-center transition-all ${
+                tutorialWaitDone
+                  ? "bg-game-success/20 border-game-success scale-110"
+                  : "bg-accent/10 border-accent glow-gold"
+              }`}
+              onPointerDown={() => {
+                if (!tutorialWaitDone) {
+                  playSound("fail");
+                  vibrate([50, 30, 50]);
+                  triggerShake();
+                  spawnParticles("hsl(0 85% 55%)");
+                }
+              }}
+            >
+              <span className={`font-display font-bold text-sm ${tutorialWaitDone ? "text-game-success" : "text-accent text-glow-gold"}`}>
+                {tutorialWaitDone ? "GREAT!" : "DON'T TAP"}
+              </span>
+            </div>
+          )}
+
+          {tutorialStep === 3 && (
+            <div className="w-32 h-32 rounded-full bg-secondary/20 border-2 border-secondary flex items-center justify-center glow-magenta">
+              <span className="font-display font-bold text-sm text-secondary text-glow-magenta text-center">
+                TAP... NOT!
+              </span>
+            </div>
+          )}
+
+          <button
+            onClick={() => {
+              if (tutorialStep === 1 && !tutorialTapped) return;
+              if (tutorialStep === 2 && !tutorialWaitDone) return;
+              if (tutorialStep >= 4) {
+                setPhase("menu");
+                return;
+              }
+              const next = (tutorialStep + 1) as TutorialStep;
+              setTutorialStep(next);
+              if (next === 2) setTutorialWaitDone(false);
+            }}
+            className={`mt-2 px-8 py-3 font-display font-bold text-sm rounded-xl transition-all ${
+              (tutorialStep === 1 && !tutorialTapped) || (tutorialStep === 2 && !tutorialWaitDone)
+                ? "bg-muted text-muted-foreground cursor-not-allowed"
+                : tutorialStep >= 4
+                ? "bg-primary text-primary-foreground glow-cyan hover:scale-105 active:scale-95"
+                : "bg-card text-foreground border border-border hover:border-primary/50 hover:scale-105 active:scale-95"
+            }`}
+          >
+            {TUTORIAL_STEPS[tutorialStep].action}
+          </button>
+
+          <button
+            onClick={() => setPhase("menu")}
+            className="font-display text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            SKIP
+          </button>
         </div>
       )}
 
@@ -437,7 +700,7 @@ export default function TapOrWaitGame() {
 
       {/* GAME OVER */}
       {phase === "gameover" && (
-        <div className="flex flex-col items-center gap-5 z-10 px-6 animate-shake">
+        <div className="flex flex-col items-center gap-5 z-10 px-6">
           <div className="font-display font-black text-4xl md:text-6xl text-destructive" style={{ textShadow: "0 0 20px hsl(0 85% 55% / 0.8)" }}>
             GAME OVER
           </div>
@@ -458,6 +721,32 @@ export default function TapOrWaitGame() {
           <div className="text-muted-foreground text-xs mt-1">
             Survived {round} round{round !== 1 ? "s" : ""} on {config.label}
           </div>
+
+          {/* Name input for leaderboard */}
+          {showNameInput && (
+            <div className="flex flex-col items-center gap-2 mt-2">
+              <span className="font-display text-xs text-primary text-glow-cyan">NEW HIGH SCORE! ENTER NAME:</span>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={e => setPlayerName(e.target.value)}
+                  maxLength={10}
+                  placeholder="YOUR NAME"
+                  className="px-3 py-2 bg-card border border-border rounded-lg font-display text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary w-32 text-center uppercase"
+                  autoFocus
+                  onKeyDown={e => e.key === "Enter" && handleSaveScore()}
+                />
+                <button
+                  onClick={handleSaveScore}
+                  className="px-4 py-2 bg-primary text-primary-foreground font-display text-xs font-bold rounded-lg hover:scale-105 active:scale-95 transition-transform"
+                >
+                  SAVE
+                </button>
+              </div>
+            </div>
+          )}
+
           <button
             onClick={startGame}
             className="mt-3 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
@@ -469,6 +758,54 @@ export default function TapOrWaitGame() {
             className="px-6 py-2 font-display text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             MENU
+          </button>
+        </div>
+      )}
+
+      {/* LEADERBOARD */}
+      {phase === "leaderboard" && (
+        <div className="flex flex-col items-center gap-4 z-10 px-6 max-w-sm w-full">
+          <h2 className="font-display font-bold text-3xl text-accent text-glow-gold">
+            LEADERBOARD
+          </h2>
+          {leaderboard.length === 0 ? (
+            <p className="text-muted-foreground text-sm font-display mt-4">No scores yet. Play to get on the board!</p>
+          ) : (
+            <div className="w-full flex flex-col gap-1 mt-2">
+              <div className="flex items-center gap-2 px-3 py-1 text-muted-foreground font-display text-[10px] uppercase tracking-wider">
+                <span className="w-6">#</span>
+                <span className="flex-1">NAME</span>
+                <span className="w-16 text-right">SCORE</span>
+                <span className="w-12 text-right">COMBO</span>
+                <span className="w-12 text-right">DIFF</span>
+              </div>
+              {leaderboard.map((entry, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-display text-xs ${
+                    i === 0
+                      ? "bg-accent/10 border border-accent/30 text-accent"
+                      : i === 1
+                      ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
+                      : i === 2
+                      ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
+                      : "bg-card/50 text-muted-foreground"
+                  }`}
+                >
+                  <span className="w-6 font-bold">{i + 1}</span>
+                  <span className="flex-1 truncate">{entry.name}</span>
+                  <span className="w-16 text-right font-bold">{entry.score}</span>
+                  <span className="w-12 text-right">{entry.maxCombo}x</span>
+                  <span className="w-12 text-right text-[10px]">{DIFFICULTY_CONFIG[entry.difficulty]?.label || "?"}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <button
+            onClick={() => setPhase("menu")}
+            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all"
+          >
+            BACK
           </button>
         </div>
       )}
