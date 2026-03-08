@@ -19,6 +19,9 @@ export default {
         ring: "hsl(var(--ring))",
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",
+        "game-success": "hsl(var(--game-success))",
+        "game-danger": "hsl(var(--game-danger))",
+        "game-wait": "hsl(var(--game-wait))",
         primary: {
           DEFAULT: "hsl(var(--primary))",
           foreground: "hsl(var(--primary-foreground))",
