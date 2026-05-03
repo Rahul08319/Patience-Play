@@ -161,6 +161,10 @@ const TUTORIAL_STEPS = [
 export default function TapOrWaitGame() {
   const [phase, setPhase] = useState<GamePhase>("menu");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
+  const [mode, setMode] = useState<GameMode>("classic");
+  const [settings, setSettings] = useState<GameSettings>(loadSettings());
+  const [survivalMs, setSurvivalMs] = useState(0);
+  const survivalStartRef = useRef(0);
   const [round, setRound] = useState(0);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
