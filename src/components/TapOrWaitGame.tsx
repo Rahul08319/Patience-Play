@@ -954,6 +954,40 @@ export default function TapOrWaitGame() {
           </button>
         </div>
       )}
+
+      {/* SETTINGS */}
+      {phase === "settings" && (
+        <div className="flex flex-col items-center gap-5 z-10 px-6 max-w-sm w-full">
+          <h2 className="font-display font-bold text-3xl text-primary text-glow-cyan">
+            SETTINGS
+          </h2>
+          <div className="w-full flex flex-col gap-3 mt-2">
+            {([
+              { key: "sound", label: "🔊 SOUND EFFECTS", desc: "Synth tones on actions" },
+              { key: "haptics", label: "📳 HAPTIC FEEDBACK", desc: "Vibrate on tap & events" },
+              { key: "scanlines", label: "📺 SCANLINE EFFECT", desc: "Retro CRT overlay" },
+            ] as { key: keyof GameSettings; label: string; desc: string }[]).map(item => (
+              <button
+                key={item.key}
+                onClick={() => setSettings(s => ({ ...s, [item.key]: !s[item.key] }))}
+                className="flex items-center justify-between gap-4 px-4 py-3 bg-card border border-border rounded-xl hover:border-primary/50 transition-colors"
+              >
+                <div className="flex flex-col items-start">
+                  <span className="font-display font-bold text-sm text-foreground">{item.label}</span>
+                  <span className="text-muted-foreground text-[10px]">{item.desc}</span>
+                </div>
+                <div className={`w-11 h-6 rounded-full p-0.5 transition-colors ${settings[item.key] ? "bg-primary" : "bg-muted"}`}>
+                  <div className={`w-5 h-5 rounded-full bg-background transition-transform ${settings[item.key] ? "translate-x-5" : ""}`} />
+                </div>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setPhase("menu")}
+            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
+            BACK
+          </button>
+        </div>
+      )}
     </div>
   );
 }
