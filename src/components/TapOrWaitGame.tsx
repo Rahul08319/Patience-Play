@@ -661,14 +661,31 @@ export default function TapOrWaitGame() {
             ))}
           </div>
 
+          {/* Mode selector */}
+          <div className="flex gap-2">
+            {(["classic", "endless"] as GameMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
+                  mode === m
+                    ? "bg-secondary/20 text-secondary border border-secondary/50 glow-magenta"
+                    : "bg-muted text-muted-foreground border border-border hover:border-foreground/30"
+                }`}
+              >
+                {m === "classic" ? "CLASSIC" : "ENDLESS"}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={startGame}
-            className="mt-4 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
+            className="mt-2 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
           >
             PLAY
           </button>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3 flex-wrap justify-center">
             <button
               onClick={() => { setTutorialStep(0); setTutorialTapped(false); setTutorialWaitDone(false); setPhase("tutorial"); }}
               className="px-5 py-2 font-display text-xs text-secondary border border-secondary/30 rounded-lg hover:bg-secondary/10 transition-colors"
@@ -680,6 +697,12 @@ export default function TapOrWaitGame() {
               className="px-5 py-2 font-display text-xs text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
             >
               LEADERBOARD
+            </button>
+            <button
+              onClick={() => setPhase("settings")}
+              className="px-5 py-2 font-display text-xs text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors"
+            >
+              SETTINGS
             </button>
           </div>
 
