@@ -882,6 +882,7 @@ export default function TapOrWaitGame() {
           </div>
           <div className="text-muted-foreground text-xs mt-1">
             Survived {round} round{round !== 1 ? "s" : ""} on {config.label}
+            {mode === "endless" && ` • ${(survivalMs / 1000).toFixed(1)}s ENDLESS`}
           </div>
 
           {showNameInput && (
