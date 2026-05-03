@@ -293,8 +293,24 @@ export default function TapOrWaitGame() {
     setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
     setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
     setExtraLives(0); setPowerUpNotice(null);
+    setSurvivalMs(0);
+    survivalStartRef.current = Date.now();
     setPhase("countdown"); setCountdown(3);
   };
+
+  // Survival timer ticker (endless mode)
+  useEffect(() => {
+    if (mode !== "endless") return;
+    if (phase !== "playing" && phase !== "result") return;
+    const id = setInterval(() => setSurvivalMs(Date.now() - survivalStartRef.current), 100);
+    return () => clearInterval(id);
+  }, [mode, phase]);
+
+  // Persist & sync settings
+  useEffect(() => {
+    currentSettings = settings;
+    localStorage.setItem("tapOrWait_settings", JSON.stringify(settings));
+  }, [settings]);
 
   // Countdown
   useEffect(() => {
