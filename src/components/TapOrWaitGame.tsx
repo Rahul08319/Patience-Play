@@ -65,10 +65,14 @@ function getRandomItem<T>(arr: T[]): T {
 }
 
 function vibrate(pattern: number | number[]) {
+  if (!currentSettings.haptics) return;
   if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
+let currentSettings: GameSettings = loadSettings();
+
 function playSound(type: "success" | "fail" | "tap" | "combo" | "powerup") {
+  if (!currentSettings.sound) return;
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
