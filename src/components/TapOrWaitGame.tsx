@@ -1,11 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-type GamePhase = "menu" | "tutorial" | "countdown" | "playing" | "result" | "gameover" | "leaderboard";
+type GamePhase = "menu" | "tutorial" | "countdown" | "playing" | "result" | "gameover" | "leaderboard" | "settings";
 type RoundType = "tap" | "wait";
 type RoundResult = "success" | "fail" | null;
 type Difficulty = "easy" | "normal" | "hard";
+type GameMode = "classic" | "endless";
 type TutorialStep = 0 | 1 | 2 | 3 | 4;
 type PowerUpType = "time_freeze" | "double_points" | "extra_life";
+
+interface GameSettings {
+  sound: boolean;
+  haptics: boolean;
+  scanlines: boolean;
+}
+
+const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlines: true };
+
+function loadSettings(): GameSettings {
+  try {
+    const raw = localStorage.getItem("tapOrWait_settings");
+    if (!raw) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch { return DEFAULT_SETTINGS; }
+}
 
 interface LeaderboardEntry {
   name: string;
