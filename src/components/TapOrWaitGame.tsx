@@ -562,8 +562,13 @@ export default function TapOrWaitGame() {
               RD <span className="text-foreground">{round + 1}</span>
             </div>
             <div className="font-display text-[10px] text-muted-foreground uppercase tracking-wider">
-              {config.label}
+              {config.label} {mode === "endless" && "• ENDLESS"}
             </div>
+            {mode === "endless" && (
+              <div className="font-display text-xs text-secondary text-glow-magenta">
+                ⏱ {(survivalMs / 1000).toFixed(1)}s
+              </div>
+            )}
             {/* Active power-ups indicator */}
             {(activePowerUps.length > 0 || extraLives > 0) && (
               <div className="flex gap-1 mt-1">
