@@ -208,9 +208,11 @@ export default function TapOrWaitGame() {
   }, [activePowerUps]);
 
   const getMaxTime = useCallback((currentRound: number) => {
-    const base = Math.max(config.baseTime - currentRound * config.decay, config.minTime);
+    const decay = mode === "endless" ? config.decay * 1.6 : config.decay;
+    const minTime = mode === "endless" ? Math.max(config.minTime - 200, 350) : config.minTime;
+    const base = Math.max(config.baseTime - currentRound * decay, minTime);
     return hasActivePowerUp("time_freeze") ? Math.floor(base * 1.5) : base;
-  }, [config, hasActivePowerUp]);
+  }, [config, hasActivePowerUp, mode]);
 
   const maxTime = getMaxTime(round);
 
