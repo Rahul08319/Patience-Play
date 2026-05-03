@@ -1,11 +1,28 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 
-type GamePhase = "menu" | "tutorial" | "countdown" | "playing" | "result" | "gameover" | "leaderboard";
+type GamePhase = "menu" | "tutorial" | "countdown" | "playing" | "result" | "gameover" | "leaderboard" | "settings";
 type RoundType = "tap" | "wait";
 type RoundResult = "success" | "fail" | null;
 type Difficulty = "easy" | "normal" | "hard";
+type GameMode = "classic" | "endless";
 type TutorialStep = 0 | 1 | 2 | 3 | 4;
 type PowerUpType = "time_freeze" | "double_points" | "extra_life";
+
+interface GameSettings {
+  sound: boolean;
+  haptics: boolean;
+  scanlines: boolean;
+}
+
+const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlines: true };
+
+function loadSettings(): GameSettings {
+  try {
+    const raw = localStorage.getItem("tapOrWait_settings");
+    if (!raw) return DEFAULT_SETTINGS;
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+  } catch { return DEFAULT_SETTINGS; }
+}
 
 interface LeaderboardEntry {
   name: string;
@@ -48,10 +65,14 @@ function getRandomItem<T>(arr: T[]): T {
 }
 
 function vibrate(pattern: number | number[]) {
+  if (!currentSettings.haptics) return;
   if (navigator.vibrate) navigator.vibrate(pattern);
 }
 
+let currentSettings: GameSettings = loadSettings();
+
 function playSound(type: "success" | "fail" | "tap" | "combo" | "powerup") {
+  if (!currentSettings.sound) return;
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
     const osc = ctx.createOscillator();
@@ -140,6 +161,10 @@ const TUTORIAL_STEPS = [
 export default function TapOrWaitGame() {
   const [phase, setPhase] = useState<GamePhase>("menu");
   const [difficulty, setDifficulty] = useState<Difficulty>("normal");
+  const [mode, setMode] = useState<GameMode>("classic");
+  const [settings, setSettings] = useState<GameSettings>(loadSettings());
+  const [survivalMs, setSurvivalMs] = useState(0);
+  const survivalStartRef = useRef(0);
   const [round, setRound] = useState(0);
   const [score, setScore] = useState(0);
   const [combo, setCombo] = useState(0);
@@ -183,9 +208,11 @@ export default function TapOrWaitGame() {
   }, [activePowerUps]);
 
   const getMaxTime = useCallback((currentRound: number) => {
-    const base = Math.max(config.baseTime - currentRound * config.decay, config.minTime);
+    const decay = mode === "endless" ? config.decay * 1.6 : config.decay;
+    const minTime = mode === "endless" ? Math.max(config.minTime - 200, 350) : config.minTime;
+    const base = Math.max(config.baseTime - currentRound * decay, minTime);
     return hasActivePowerUp("time_freeze") ? Math.floor(base * 1.5) : base;
-  }, [config, hasActivePowerUp]);
+  }, [config, hasActivePowerUp, mode]);
 
   const maxTime = getMaxTime(round);
 
@@ -266,8 +293,24 @@ export default function TapOrWaitGame() {
     setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
     setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
     setExtraLives(0); setPowerUpNotice(null);
+    setSurvivalMs(0);
+    survivalStartRef.current = Date.now();
     setPhase("countdown"); setCountdown(3);
   };
+
+  // Survival timer ticker (endless mode)
+  useEffect(() => {
+    if (mode !== "endless") return;
+    if (phase !== "playing" && phase !== "result") return;
+    const id = setInterval(() => setSurvivalMs(Date.now() - survivalStartRef.current), 100);
+    return () => clearInterval(id);
+  }, [mode, phase]);
+
+  // Persist & sync settings
+  useEffect(() => {
+    currentSettings = settings;
+    localStorage.setItem("tapOrWait_settings", JSON.stringify(settings));
+  }, [settings]);
 
   // Countdown
   useEffect(() => {
@@ -456,8 +499,7 @@ export default function TapOrWaitGame() {
       {/* Retro grid background */}
       <div className="retro-grid" />
       {/* Scanline overlay */}
-      <div className="scanlines" />
-
+      {settings.scanlines && <div className="scanlines" />}
       {/* Particles */}
       {particles.map(p => (
         <div
@@ -520,8 +562,13 @@ export default function TapOrWaitGame() {
               RD <span className="text-foreground">{round + 1}</span>
             </div>
             <div className="font-display text-[10px] text-muted-foreground uppercase tracking-wider">
-              {config.label}
+              {config.label} {mode === "endless" && "• ENDLESS"}
             </div>
+            {mode === "endless" && (
+              <div className="font-display text-xs text-secondary text-glow-magenta">
+                ⏱ {(survivalMs / 1000).toFixed(1)}s
+              </div>
+            )}
             {/* Active power-ups indicator */}
             {(activePowerUps.length > 0 || extraLives > 0) && (
               <div className="flex gap-1 mt-1">
@@ -614,14 +661,31 @@ export default function TapOrWaitGame() {
             ))}
           </div>
 
+          {/* Mode selector */}
+          <div className="flex gap-2">
+            {(["classic", "endless"] as GameMode[]).map(m => (
+              <button
+                key={m}
+                onClick={() => setMode(m)}
+                className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
+                  mode === m
+                    ? "bg-secondary/20 text-secondary border border-secondary/50 glow-magenta"
+                    : "bg-muted text-muted-foreground border border-border hover:border-foreground/30"
+                }`}
+              >
+                {m === "classic" ? "CLASSIC" : "ENDLESS"}
+              </button>
+            ))}
+          </div>
+
           <button
             onClick={startGame}
-            className="mt-4 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
+            className="mt-2 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
           >
             PLAY
           </button>
 
-          <div className="flex gap-4">
+          <div className="flex gap-3 flex-wrap justify-center">
             <button
               onClick={() => { setTutorialStep(0); setTutorialTapped(false); setTutorialWaitDone(false); setPhase("tutorial"); }}
               className="px-5 py-2 font-display text-xs text-secondary border border-secondary/30 rounded-lg hover:bg-secondary/10 transition-colors"
@@ -633,6 +697,12 @@ export default function TapOrWaitGame() {
               className="px-5 py-2 font-display text-xs text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
             >
               LEADERBOARD
+            </button>
+            <button
+              onClick={() => setPhase("settings")}
+              className="px-5 py-2 font-display text-xs text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors"
+            >
+              SETTINGS
             </button>
           </div>
 
@@ -812,6 +882,7 @@ export default function TapOrWaitGame() {
           </div>
           <div className="text-muted-foreground text-xs mt-1">
             Survived {round} round{round !== 1 ? "s" : ""} on {config.label}
+            {mode === "endless" && ` • ${(survivalMs / 1000).toFixed(1)}s ENDLESS`}
           </div>
 
           {showNameInput && (
@@ -877,6 +948,40 @@ export default function TapOrWaitGame() {
               ))}
             </div>
           )}
+          <button onClick={() => setPhase("menu")}
+            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
+            BACK
+          </button>
+        </div>
+      )}
+
+      {/* SETTINGS */}
+      {phase === "settings" && (
+        <div className="flex flex-col items-center gap-5 z-10 px-6 max-w-sm w-full">
+          <h2 className="font-display font-bold text-3xl text-primary text-glow-cyan">
+            SETTINGS
+          </h2>
+          <div className="w-full flex flex-col gap-3 mt-2">
+            {([
+              { key: "sound", label: "🔊 SOUND EFFECTS", desc: "Synth tones on actions" },
+              { key: "haptics", label: "📳 HAPTIC FEEDBACK", desc: "Vibrate on tap & events" },
+              { key: "scanlines", label: "📺 SCANLINE EFFECT", desc: "Retro CRT overlay" },
+            ] as { key: keyof GameSettings; label: string; desc: string }[]).map(item => (
+              <button
+                key={item.key}
+                onClick={() => setSettings(s => ({ ...s, [item.key]: !s[item.key] }))}
+                className="flex items-center justify-between gap-4 px-4 py-3 bg-card border border-border rounded-xl hover:border-primary/50 transition-colors"
+              >
+                <div className="flex flex-col items-start">
+                  <span className="font-display font-bold text-sm text-foreground">{item.label}</span>
+                  <span className="text-muted-foreground text-[10px]">{item.desc}</span>
+                </div>
+                <div className={`w-11 h-6 rounded-full p-0.5 transition-colors ${settings[item.key] ? "bg-primary" : "bg-muted"}`}>
+                  <div className={`w-5 h-5 rounded-full bg-background transition-transform ${settings[item.key] ? "translate-x-5" : ""}`} />
+                </div>
+              </button>
+            ))}
+          </div>
           <button onClick={() => setPhase("menu")}
             className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
             BACK
