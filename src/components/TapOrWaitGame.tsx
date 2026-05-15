@@ -594,8 +594,10 @@ export default function TapOrWaitGame() {
     >
       {/* Retro grid background */}
       <div className="retro-grid" />
-      {/* Scanline overlay */}
-      {settings.scanlines && <div className="scanlines" />}
+      {/* Scanline overlay (intensity slider) */}
+      {settings.scanlineIntensity > 0 && (
+        <div className="scanlines" style={{ opacity: settings.scanlineIntensity / 100 }} />
+      )}
       {/* Particles */}
       {particles.map(p => (
         <div
