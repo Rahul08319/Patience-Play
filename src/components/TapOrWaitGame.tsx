@@ -612,25 +612,37 @@ export default function TapOrWaitGame() {
       ))}
 
       {/* Power-up pickups */}
-      {powerUpPickups.map(pickup => (
-        <div
-          key={pickup.id}
-          className="absolute z-30 cursor-pointer animate-pulse-ring"
-          style={{ left: `${pickup.x}%`, top: `${pickup.y}%` }}
-          onPointerDown={(e) => { e.stopPropagation(); collectPowerUp(pickup); }}
-        >
+      {powerUpPickups.map(pickup => {
+        const pcfg = POWER_UP_CONFIG[pickup.type];
+        return (
           <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-xl border-2 backdrop-blur-sm"
-            style={{
-              backgroundColor: `${POWER_UP_CONFIG[pickup.type].color.replace(")", " / 0.2)")}`,
-              borderColor: POWER_UP_CONFIG[pickup.type].color,
-              boxShadow: `0 0 15px ${POWER_UP_CONFIG[pickup.type].color}, 0 0 30px ${POWER_UP_CONFIG[pickup.type].color.replace(")", " / 0.3)")}`,
-            }}
+            key={pickup.id}
+            className="absolute z-30 cursor-pointer animate-pulse-ring flex flex-col items-center gap-1"
+            style={{ left: `${pickup.x}%`, top: `${pickup.y}%` }}
+            onPointerDown={(e) => { e.stopPropagation(); collectPowerUp(pickup); }}
           >
-            {POWER_UP_CONFIG[pickup.type].icon}
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center text-xl border-2 backdrop-blur-sm"
+              style={{
+                backgroundColor: `${pcfg.color.replace(")", " / 0.2)")}`,
+                borderColor: pcfg.color,
+                boxShadow: `0 0 15px ${pcfg.color}, 0 0 30px ${pcfg.color.replace(")", " / 0.3)")}`,
+              }}
+            >
+              {pcfg.icon}
+            </div>
+            <span
+              className="font-display text-[9px] font-bold whitespace-nowrap px-1.5 py-0.5 rounded"
+              style={{ color: pcfg.color, backgroundColor: "hsl(240 15% 6% / 0.7)" }}
+            >
+              {pcfg.label}
+            </span>
+            <span className="font-display text-[8px] text-muted-foreground whitespace-nowrap">
+              {pcfg.desc}
+            </span>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Power-up notice */}
       {powerUpNotice && (
