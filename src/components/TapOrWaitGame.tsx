@@ -269,7 +269,13 @@ export default function TapOrWaitGame() {
   const getMaxTime = useCallback((currentRound: number) => {
     const decay = mode === "endless" ? config.decay * 1.6 : config.decay;
     const minTime = mode === "endless" ? Math.max(config.minTime - 200, 350) : config.minTime;
-    const base = Math.max(config.baseTime - currentRound * decay, minTime);
+    let base = Math.max(config.baseTime - currentRound * decay, minTime);
+    if (mode === "endless") {
+      // Smooth survival ramp: every 10s shaves ~12% off the window, floor at 55%.
+      const sec = survivalMsRef.current / 1000;
+      const ramp = Math.max(0.55, 1 - sec * 0.012);
+      base = Math.max(base * ramp, 300);
+    }
     return hasActivePowerUp("time_freeze") ? Math.floor(base * 1.5) : base;
   }, [config, hasActivePowerUp, mode]);
 
