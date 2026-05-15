@@ -568,12 +568,20 @@ export default function TapOrWaitGame() {
   }, [particles.length]);
 
   const handleSaveScore = () => {
-    const name = playerName.trim() || "ANON";
-    const updated = saveToLeaderboard({
-      name: name.toUpperCase().slice(0, 10), score, difficulty, maxCombo,
-      date: new Date().toLocaleDateString(),
-    });
-    setLeaderboard(updated); setShowNameInput(false);
+    const name = (playerName.trim() || "ANON").toUpperCase().slice(0, 10);
+    const date = new Date().toLocaleDateString();
+    if (mode === "endless") {
+      const updated = saveToEndlessLeaderboard({
+        name, survivalMs: survivalMsRef.current, difficulty, rounds: round, date,
+      });
+      setEndlessLeaderboard(updated);
+      setLeaderboardTab("endless");
+    } else {
+      const updated = saveToLeaderboard({ name, score, difficulty, maxCombo, date });
+      setLeaderboard(updated);
+      setLeaderboardTab("classic");
+    }
+    setShowNameInput(false);
   };
 
   const timerPercent = maxTime > 0 ? (timeLeft / maxTime) * 100 : 0;
