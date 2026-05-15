@@ -803,7 +803,12 @@ export default function TapOrWaitGame() {
               TUTORIAL
             </button>
             <button
-              onClick={() => { setLeaderboard(getLeaderboard()); setPhase("leaderboard"); }}
+              onClick={() => {
+                setLeaderboard(getLeaderboard());
+                setEndlessLeaderboard(getEndlessLeaderboard());
+                setLeaderboardTab(mode);
+                setPhase("leaderboard");
+              }}
               className="px-5 py-2 font-display text-xs text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
             >
               LEADERBOARD
