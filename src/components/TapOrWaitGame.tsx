@@ -251,6 +251,14 @@ export default function TapOrWaitGame() {
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fakeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const roundStartRef = useRef(0);
+  const survivalMsRef = useRef(0);
+  const noticeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showNotice = useCallback((text: string, ms = 1300) => {
+    if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current);
+    setPowerUpNotice(text);
+    noticeTimeoutRef.current = setTimeout(() => setPowerUpNotice(null), ms);
+  }, []);
 
   const config = DIFFICULTY_CONFIG[difficulty];
 
