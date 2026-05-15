@@ -509,11 +509,15 @@ export default function TapOrWaitGame() {
           setHighScore(prev);
           localStorage.setItem("tapOrWait_highScore", prev.toString());
         }
-        if (isLeaderboardWorthy(prev)) setShowNameInput(true);
+        if (mode === "endless") {
+          if (isEndlessLeaderboardWorthy(survivalMsRef.current)) setShowNameInput(true);
+        } else {
+          if (isLeaderboardWorthy(prev)) setShowNameInput(true);
+        }
         return prev;
       });
     }
-  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles, tickPowerUps, hasActivePowerUp, extraLives]);
+  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles, tickPowerUps, hasActivePowerUp, extraLives, mode, showNotice]);
 
   const handleTap = useCallback(() => {
     if (phase !== "playing" || tapped) return;
