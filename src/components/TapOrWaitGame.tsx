@@ -1030,45 +1030,77 @@ export default function TapOrWaitGame() {
       )}
 
       {/* LEADERBOARD */}
-      {phase === "leaderboard" && (
-        <div className="flex flex-col items-center gap-4 z-10 px-6 max-w-sm w-full">
-          <h2 className="font-display font-bold text-3xl text-accent text-glow-gold">
-            LEADERBOARD
-          </h2>
-          {leaderboard.length === 0 ? (
-            <p className="text-muted-foreground text-sm font-display mt-4">No scores yet. Play to get on the board!</p>
-          ) : (
-            <div className="w-full flex flex-col gap-1 mt-2">
-              <div className="flex items-center gap-2 px-3 py-1 text-muted-foreground font-display text-[10px] uppercase tracking-wider">
-                <span className="w-6">#</span>
-                <span className="flex-1">NAME</span>
-                <span className="w-16 text-right">SCORE</span>
-                <span className="w-12 text-right">COMBO</span>
-                <span className="w-12 text-right">DIFF</span>
-              </div>
-              {leaderboard.map((entry, i) => (
-                <div key={i}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-display text-xs ${
-                    i === 0 ? "bg-accent/10 border border-accent/30 text-accent"
-                    : i === 1 ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
-                    : i === 2 ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
-                    : "bg-card/50 text-muted-foreground"
-                  }`}>
-                  <span className="w-6 font-bold">{i + 1}</span>
-                  <span className="flex-1 truncate">{entry.name}</span>
-                  <span className="w-16 text-right font-bold">{entry.score}</span>
-                  <span className="w-12 text-right">{entry.maxCombo}x</span>
-                  <span className="w-12 text-right text-[10px]">{DIFFICULTY_CONFIG[entry.difficulty]?.label || "?"}</span>
-                </div>
+      {phase === "leaderboard" && (() => {
+        const isEndless = leaderboardTab === "endless";
+        const list: (LeaderboardEntry | EndlessLeaderboardEntry)[] = isEndless ? endlessLeaderboard : leaderboard;
+        return (
+          <div className="flex flex-col items-center gap-4 z-10 px-6 max-w-sm w-full">
+            <h2 className="font-display font-bold text-3xl text-accent text-glow-gold">
+              LEADERBOARD
+            </h2>
+            {/* Tabs */}
+            <div className="flex gap-2">
+              {(["classic", "endless"] as GameMode[]).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setLeaderboardTab(t)}
+                  className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
+                    leaderboardTab === t
+                      ? t === "classic"
+                        ? "bg-primary/20 text-primary border border-primary/50 glow-cyan"
+                        : "bg-secondary/20 text-secondary border border-secondary/50 glow-magenta"
+                      : "bg-muted text-muted-foreground border border-border"
+                  }`}
+                >
+                  {t === "classic" ? "CLASSIC" : "ENDLESS"}
+                </button>
               ))}
             </div>
-          )}
-          <button onClick={() => setPhase("menu")}
-            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
-            BACK
-          </button>
-        </div>
-      )}
+            {list.length === 0 ? (
+              <p className="text-muted-foreground text-sm font-display mt-4 text-center">
+                No {isEndless ? "endless" : "classic"} scores yet.<br/>Play to get on the board!
+              </p>
+            ) : (
+              <div className="w-full flex flex-col gap-1 mt-2">
+                <div className="flex items-center gap-2 px-3 py-1 text-muted-foreground font-display text-[10px] uppercase tracking-wider">
+                  <span className="w-6">#</span>
+                  <span className="flex-1">NAME</span>
+                  <span className="w-16 text-right">{isEndless ? "TIME" : "SCORE"}</span>
+                  <span className="w-12 text-right">{isEndless ? "RDS" : "COMBO"}</span>
+                  <span className="w-12 text-right">DIFF</span>
+                </div>
+                {list.map((entry, i) => (
+                  <div key={i}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg font-display text-xs ${
+                      i === 0 ? "bg-accent/10 border border-accent/30 text-accent"
+                      : i === 1 ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
+                      : i === 2 ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
+                      : "bg-card/50 text-muted-foreground"
+                    }`}>
+                    <span className="w-6 font-bold">{i + 1}</span>
+                    <span className="flex-1 truncate">{entry.name}</span>
+                    <span className="w-16 text-right font-bold">
+                      {isEndless
+                        ? `${((entry as EndlessLeaderboardEntry).survivalMs / 1000).toFixed(1)}s`
+                        : (entry as LeaderboardEntry).score}
+                    </span>
+                    <span className="w-12 text-right">
+                      {isEndless
+                        ? (entry as EndlessLeaderboardEntry).rounds
+                        : `${(entry as LeaderboardEntry).maxCombo}x`}
+                    </span>
+                    <span className="w-12 text-right text-[10px]">{DIFFICULTY_CONFIG[entry.difficulty]?.label || "?"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setPhase("menu")}
+              className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
+              BACK
+            </button>
+          </div>
+        );
+      })()}
 
       {/* SETTINGS */}
       {phase === "settings" && (
