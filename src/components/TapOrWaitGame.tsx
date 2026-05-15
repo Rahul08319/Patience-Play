@@ -1112,8 +1112,7 @@ export default function TapOrWaitGame() {
             {([
               { key: "sound", label: "🔊 SOUND EFFECTS", desc: "Synth tones on actions" },
               { key: "haptics", label: "📳 HAPTIC FEEDBACK", desc: "Vibrate on tap & events" },
-              { key: "scanlines", label: "📺 SCANLINE EFFECT", desc: "Retro CRT overlay" },
-            ] as { key: keyof GameSettings; label: string; desc: string }[]).map(item => (
+            ] as { key: "sound" | "haptics"; label: string; desc: string }[]).map(item => (
               <button
                 key={item.key}
                 onClick={() => setSettings(s => ({ ...s, [item.key]: !s[item.key] }))}
@@ -1128,6 +1127,33 @@ export default function TapOrWaitGame() {
                 </div>
               </button>
             ))}
+
+            {/* Scanline intensity slider */}
+            <div className="flex flex-col gap-2 px-4 py-3 bg-card border border-border rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col items-start">
+                  <span className="font-display font-bold text-sm text-foreground">📺 SCANLINE INTENSITY</span>
+                  <span className="text-muted-foreground text-[10px]">Tune CRT overlay strength (Samsung-friendly)</span>
+                </div>
+                <span className="font-display text-xs text-primary text-glow-cyan tabular-nums">
+                  {settings.scanlineIntensity === 0 ? "OFF" : `${settings.scanlineIntensity}%`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={settings.scanlineIntensity}
+                onChange={(e) => setSettings(s => ({ ...s, scanlineIntensity: parseInt(e.target.value) }))}
+                className="w-full accent-primary cursor-pointer"
+              />
+              <div className="flex justify-between text-[9px] text-muted-foreground font-display">
+                <span>OFF</span>
+                <span>SUBTLE</span>
+                <span>FULL</span>
+              </div>
+            </div>
           </div>
           <button onClick={() => setPhase("menu")}
             className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
