@@ -11,16 +11,21 @@ type PowerUpType = "time_freeze" | "double_points" | "extra_life";
 interface GameSettings {
   sound: boolean;
   haptics: boolean;
-  scanlines: boolean;
+  scanlineIntensity: number; // 0-100 (0 = off)
 }
 
-const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlines: true };
+const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlineIntensity: 60 };
 
 function loadSettings(): GameSettings {
   try {
     const raw = localStorage.getItem("tapOrWait_settings");
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    // Migrate old boolean `scanlines`
+    if (typeof parsed.scanlines === "boolean" && parsed.scanlineIntensity == null) {
+      parsed.scanlineIntensity = parsed.scanlines ? 60 : 0;
+    }
+    return { ...DEFAULT_SETTINGS, ...parsed };
   } catch { return DEFAULT_SETTINGS; }
 }
 
@@ -29,6 +34,14 @@ interface LeaderboardEntry {
   score: number;
   difficulty: Difficulty;
   maxCombo: number;
+  date: string;
+}
+
+interface EndlessLeaderboardEntry {
+  name: string;
+  survivalMs: number;
+  difficulty: Difficulty;
+  rounds: number;
   date: string;
 }
 
