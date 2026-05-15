@@ -234,6 +234,8 @@ export default function TapOrWaitGame() {
   const [tutorialTapped, setTutorialTapped] = useState(false);
   const [tutorialWaitDone, setTutorialWaitDone] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard());
+  const [endlessLeaderboard, setEndlessLeaderboard] = useState<EndlessLeaderboardEntry[]>(getEndlessLeaderboard());
+  const [leaderboardTab, setLeaderboardTab] = useState<GameMode>("classic");
   const [playerName, setPlayerName] = useState("");
   const [showNameInput, setShowNameInput] = useState(false);
 
