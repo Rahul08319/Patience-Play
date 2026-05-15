@@ -180,6 +180,25 @@ function isLeaderboardWorthy(score: number): boolean {
   return score > board[board.length - 1].score;
 }
 
+function getEndlessLeaderboard(): EndlessLeaderboardEntry[] {
+  try { return JSON.parse(localStorage.getItem("tapOrWait_endlessLeaderboard") || "[]"); } catch { return []; }
+}
+
+function saveToEndlessLeaderboard(entry: EndlessLeaderboardEntry) {
+  const board = getEndlessLeaderboard();
+  board.push(entry);
+  board.sort((a, b) => b.survivalMs - a.survivalMs);
+  const top10 = board.slice(0, 10);
+  localStorage.setItem("tapOrWait_endlessLeaderboard", JSON.stringify(top10));
+  return top10;
+}
+
+function isEndlessLeaderboardWorthy(ms: number): boolean {
+  const board = getEndlessLeaderboard();
+  if (board.length < 10) return ms > 0;
+  return ms > board[board.length - 1].survivalMs;
+}
+
 const TUTORIAL_STEPS = [
   { title: "WELCOME", desc: "This game tests your instincts.\nReact fast — but only when told to.", action: "NEXT" },
   { title: "TAP ROUNDS", desc: "When you see a CYAN circle,\nTAP anywhere as fast as you can!", action: "TAP TO PRACTICE", type: "tap" as const },
