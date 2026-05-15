@@ -309,20 +309,29 @@ export default function TapOrWaitGame() {
 
   // Spawn power-up pickup
   const maybeSpawnPowerUp = useCallback(() => {
-    if (Math.random() > config.powerUpChance) return;
-    const types: PowerUpType[] = ["time_freeze", "double_points", "extra_life"];
-    const type = getRandomItem(types);
+    const endless = mode === "endless";
+    const cfg = endless ? ENDLESS_POWER_UP_WEIGHTS[difficulty] : null;
+    const chance = endless ? cfg!.chance : config.powerUpChance;
+    if (Math.random() > chance) return;
+
+    const type: PowerUpType = endless
+      ? pickWeighted<PowerUpType>(cfg!.weights)
+      : getRandomItem(["time_freeze", "double_points", "extra_life"] as PowerUpType[]);
+
     const pickup: PowerUpPickup = {
       type, id: pickupIdRef.current++,
       x: 15 + Math.random() * 70,
       y: 15 + Math.random() * 50,
     };
     setPowerUpPickups(prev => [...prev, pickup]);
+    // Brief on-screen description when it appears
+    const pcfg = POWER_UP_CONFIG[type];
+    showNotice(`${pcfg.icon} ${pcfg.label} — ${pcfg.desc}`);
     // Auto-remove after 3 seconds if not collected
     setTimeout(() => {
       setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
     }, 3000);
-  }, [config.powerUpChance]);
+  }, [config.powerUpChance, mode, difficulty, showNotice]);
 
   const collectPowerUp = useCallback((pickup: PowerUpPickup) => {
     setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
@@ -342,17 +351,23 @@ export default function TapOrWaitGame() {
       });
     }
 
-    setPowerUpNotice(`${cfg.icon} ${cfg.label}`);
-    setTimeout(() => setPowerUpNotice(null), 1200);
+    showNotice(`${cfg.icon} ${cfg.label} ACTIVE — ${cfg.desc}`);
     spawnParticles(cfg.color);
-  }, [spawnParticles]);
+  }, [spawnParticles, showNotice]);
 
-  // Tick down power-up durations after each round
+  // Tick down power-up durations after each round; surface expiry notices.
   const tickPowerUps = useCallback(() => {
-    setActivePowerUps(prev =>
-      prev.map(p => ({ ...p, roundsLeft: p.roundsLeft - 1 })).filter(p => p.roundsLeft > 0)
-    );
-  }, []);
+    setActivePowerUps(prev => {
+      const next = prev.map(p => ({ ...p, roundsLeft: p.roundsLeft - 1 }));
+      const expired = next.filter(p => p.roundsLeft <= 0);
+      if (expired.length > 0) {
+        const e = expired[0];
+        const cfg = POWER_UP_CONFIG[e.type];
+        showNotice(`${cfg.icon} ${cfg.label} EXPIRED`);
+      }
+      return next.filter(p => p.roundsLeft > 0);
+    });
+  }, [showNotice]);
 
   const startGame = () => {
     setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
