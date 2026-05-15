@@ -486,8 +486,7 @@ export default function TapOrWaitGame() {
         setExtraLives(prev => prev - 1);
         playSound("powerup");
         vibrate([20, 10, 20, 10, 20]);
-        setPowerUpNotice("💜 EXTRA LIFE USED!");
-        setTimeout(() => setPowerUpNotice(null), 1200);
+        showNotice("💜 EXTRA LIFE USED — Survived this fail!");
         spawnParticles("hsl(320 100% 60%)");
         setCombo(0);
         setRoundResult("fail");
