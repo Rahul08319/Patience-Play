@@ -11,16 +11,21 @@ type PowerUpType = "time_freeze" | "double_points" | "extra_life";
 interface GameSettings {
   sound: boolean;
   haptics: boolean;
-  scanlines: boolean;
+  scanlineIntensity: number; // 0-100 (0 = off)
 }
 
-const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlines: true };
+const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlineIntensity: 60 };
 
 function loadSettings(): GameSettings {
   try {
     const raw = localStorage.getItem("tapOrWait_settings");
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = JSON.parse(raw);
+    // Migrate old boolean `scanlines`
+    if (typeof parsed.scanlines === "boolean" && parsed.scanlineIntensity == null) {
+      parsed.scanlineIntensity = parsed.scanlines ? 60 : 0;
+    }
+    return { ...DEFAULT_SETTINGS, ...parsed };
   } catch { return DEFAULT_SETTINGS; }
 }
 
@@ -29,6 +34,14 @@ interface LeaderboardEntry {
   score: number;
   difficulty: Difficulty;
   maxCombo: number;
+  date: string;
+}
+
+interface EndlessLeaderboardEntry {
+  name: string;
+  survivalMs: number;
+  difficulty: Difficulty;
+  rounds: number;
   date: string;
 }
 
@@ -49,6 +62,23 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; baseTime: number; m
   normal: { label: "NORMAL", baseTime: 2000, minTime: 800, decay: 80, fakeAfterRound: 3, fakeChance: 0.5, powerUpChance: 0.18 },
   hard: { label: "HARD", baseTime: 1400, minTime: 500, decay: 100, fakeAfterRound: 1, fakeChance: 0.7, powerUpChance: 0.12 },
 };
+
+// Endless mode: per-difficulty spawn chance + weighted rarity per power-up type.
+// Higher weight = more common. Extra-life is rarer on easy (don't need it) and more
+// generous on hard (more deaths). Time-freeze is more useful as time pressure ramps.
+const ENDLESS_POWER_UP_WEIGHTS: Record<Difficulty, { chance: number; weights: Record<PowerUpType, number> }> = {
+  easy:   { chance: 0.30, weights: { time_freeze: 2, double_points: 4, extra_life: 1 } },
+  normal: { chance: 0.22, weights: { time_freeze: 3, double_points: 2, extra_life: 2 } },
+  hard:   { chance: 0.18, weights: { time_freeze: 4, double_points: 2, extra_life: 3 } },
+};
+
+function pickWeighted<K extends string>(weights: Record<K, number>): K {
+  const entries = Object.entries(weights) as [K, number][];
+  const total = entries.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [k, w] of entries) { r -= w; if (r <= 0) return k; }
+  return entries[0][0];
+}
 
 const POWER_UP_CONFIG: Record<PowerUpType, { label: string; icon: string; color: string; desc: string; duration: number }> = {
   time_freeze: { label: "TIME FREEZE", icon: "❄️", color: "hsl(200 100% 70%)", desc: "+50% time", duration: 3 },
@@ -150,6 +180,25 @@ function isLeaderboardWorthy(score: number): boolean {
   return score > board[board.length - 1].score;
 }
 
+function getEndlessLeaderboard(): EndlessLeaderboardEntry[] {
+  try { return JSON.parse(localStorage.getItem("tapOrWait_endlessLeaderboard") || "[]"); } catch { return []; }
+}
+
+function saveToEndlessLeaderboard(entry: EndlessLeaderboardEntry) {
+  const board = getEndlessLeaderboard();
+  board.push(entry);
+  board.sort((a, b) => b.survivalMs - a.survivalMs);
+  const top10 = board.slice(0, 10);
+  localStorage.setItem("tapOrWait_endlessLeaderboard", JSON.stringify(top10));
+  return top10;
+}
+
+function isEndlessLeaderboardWorthy(ms: number): boolean {
+  const board = getEndlessLeaderboard();
+  if (board.length < 10) return ms > 0;
+  return ms > board[board.length - 1].survivalMs;
+}
+
 const TUTORIAL_STEPS = [
   { title: "WELCOME", desc: "This game tests your instincts.\nReact fast — but only when told to.", action: "NEXT" },
   { title: "TAP ROUNDS", desc: "When you see a CYAN circle,\nTAP anywhere as fast as you can!", action: "TAP TO PRACTICE", type: "tap" as const },
@@ -185,6 +234,8 @@ export default function TapOrWaitGame() {
   const [tutorialTapped, setTutorialTapped] = useState(false);
   const [tutorialWaitDone, setTutorialWaitDone] = useState(false);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>(getLeaderboard());
+  const [endlessLeaderboard, setEndlessLeaderboard] = useState<EndlessLeaderboardEntry[]>(getEndlessLeaderboard());
+  const [leaderboardTab, setLeaderboardTab] = useState<GameMode>("classic");
   const [playerName, setPlayerName] = useState("");
   const [showNameInput, setShowNameInput] = useState(false);
 
@@ -200,6 +251,14 @@ export default function TapOrWaitGame() {
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fakeTimerRef = useRef<NodeJS.Timeout | null>(null);
   const roundStartRef = useRef(0);
+  const survivalMsRef = useRef(0);
+  const noticeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  const showNotice = useCallback((text: string, ms = 1300) => {
+    if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current);
+    setPowerUpNotice(text);
+    noticeTimeoutRef.current = setTimeout(() => setPowerUpNotice(null), ms);
+  }, []);
 
   const config = DIFFICULTY_CONFIG[difficulty];
 
@@ -210,7 +269,13 @@ export default function TapOrWaitGame() {
   const getMaxTime = useCallback((currentRound: number) => {
     const decay = mode === "endless" ? config.decay * 1.6 : config.decay;
     const minTime = mode === "endless" ? Math.max(config.minTime - 200, 350) : config.minTime;
-    const base = Math.max(config.baseTime - currentRound * decay, minTime);
+    let base = Math.max(config.baseTime - currentRound * decay, minTime);
+    if (mode === "endless") {
+      // Smooth survival ramp: every 10s shaves ~12% off the window, floor at 55%.
+      const sec = survivalMsRef.current / 1000;
+      const ramp = Math.max(0.55, 1 - sec * 0.012);
+      base = Math.max(base * ramp, 300);
+    }
     return hasActivePowerUp("time_freeze") ? Math.floor(base * 1.5) : base;
   }, [config, hasActivePowerUp, mode]);
 
@@ -244,20 +309,29 @@ export default function TapOrWaitGame() {
 
   // Spawn power-up pickup
   const maybeSpawnPowerUp = useCallback(() => {
-    if (Math.random() > config.powerUpChance) return;
-    const types: PowerUpType[] = ["time_freeze", "double_points", "extra_life"];
-    const type = getRandomItem(types);
+    const endless = mode === "endless";
+    const cfg = endless ? ENDLESS_POWER_UP_WEIGHTS[difficulty] : null;
+    const chance = endless ? cfg!.chance : config.powerUpChance;
+    if (Math.random() > chance) return;
+
+    const type: PowerUpType = endless
+      ? pickWeighted<PowerUpType>(cfg!.weights)
+      : getRandomItem(["time_freeze", "double_points", "extra_life"] as PowerUpType[]);
+
     const pickup: PowerUpPickup = {
       type, id: pickupIdRef.current++,
       x: 15 + Math.random() * 70,
       y: 15 + Math.random() * 50,
     };
     setPowerUpPickups(prev => [...prev, pickup]);
+    // Brief on-screen description when it appears
+    const pcfg = POWER_UP_CONFIG[type];
+    showNotice(`${pcfg.icon} ${pcfg.label} — ${pcfg.desc}`);
     // Auto-remove after 3 seconds if not collected
     setTimeout(() => {
       setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
     }, 3000);
-  }, [config.powerUpChance]);
+  }, [config.powerUpChance, mode, difficulty, showNotice]);
 
   const collectPowerUp = useCallback((pickup: PowerUpPickup) => {
     setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
@@ -277,23 +351,30 @@ export default function TapOrWaitGame() {
       });
     }
 
-    setPowerUpNotice(`${cfg.icon} ${cfg.label}`);
-    setTimeout(() => setPowerUpNotice(null), 1200);
+    showNotice(`${cfg.icon} ${cfg.label} ACTIVE — ${cfg.desc}`);
     spawnParticles(cfg.color);
-  }, [spawnParticles]);
+  }, [spawnParticles, showNotice]);
 
-  // Tick down power-up durations after each round
+  // Tick down power-up durations after each round; surface expiry notices.
   const tickPowerUps = useCallback(() => {
-    setActivePowerUps(prev =>
-      prev.map(p => ({ ...p, roundsLeft: p.roundsLeft - 1 })).filter(p => p.roundsLeft > 0)
-    );
-  }, []);
+    setActivePowerUps(prev => {
+      const next = prev.map(p => ({ ...p, roundsLeft: p.roundsLeft - 1 }));
+      const expired = next.filter(p => p.roundsLeft <= 0);
+      if (expired.length > 0) {
+        const e = expired[0];
+        const cfg = POWER_UP_CONFIG[e.type];
+        showNotice(`${cfg.icon} ${cfg.label} EXPIRED`);
+      }
+      return next.filter(p => p.roundsLeft > 0);
+    });
+  }, [showNotice]);
 
   const startGame = () => {
     setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
     setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
     setExtraLives(0); setPowerUpNotice(null);
     setSurvivalMs(0);
+    survivalMsRef.current = 0;
     survivalStartRef.current = Date.now();
     setPhase("countdown"); setCountdown(3);
   };
@@ -302,7 +383,11 @@ export default function TapOrWaitGame() {
   useEffect(() => {
     if (mode !== "endless") return;
     if (phase !== "playing" && phase !== "result") return;
-    const id = setInterval(() => setSurvivalMs(Date.now() - survivalStartRef.current), 100);
+    const id = setInterval(() => {
+      const ms = Date.now() - survivalStartRef.current;
+      survivalMsRef.current = ms;
+      setSurvivalMs(ms);
+    }, 100);
     return () => clearInterval(id);
   }, [mode, phase]);
 
@@ -401,8 +486,7 @@ export default function TapOrWaitGame() {
         setExtraLives(prev => prev - 1);
         playSound("powerup");
         vibrate([20, 10, 20, 10, 20]);
-        setPowerUpNotice("💜 EXTRA LIFE USED!");
-        setTimeout(() => setPowerUpNotice(null), 1200);
+        showNotice("💜 EXTRA LIFE USED — Survived this fail!");
         spawnParticles("hsl(320 100% 60%)");
         setCombo(0);
         setRoundResult("fail");
@@ -425,11 +509,15 @@ export default function TapOrWaitGame() {
           setHighScore(prev);
           localStorage.setItem("tapOrWait_highScore", prev.toString());
         }
-        if (isLeaderboardWorthy(prev)) setShowNameInput(true);
+        if (mode === "endless") {
+          if (isEndlessLeaderboardWorthy(survivalMsRef.current)) setShowNameInput(true);
+        } else {
+          if (isLeaderboardWorthy(prev)) setShowNameInput(true);
+        }
         return prev;
       });
     }
-  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles, tickPowerUps, hasActivePowerUp, extraLives]);
+  }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles, tickPowerUps, hasActivePowerUp, extraLives, mode, showNotice]);
 
   const handleTap = useCallback(() => {
     if (phase !== "playing" || tapped) return;
@@ -480,12 +568,20 @@ export default function TapOrWaitGame() {
   }, [particles.length]);
 
   const handleSaveScore = () => {
-    const name = playerName.trim() || "ANON";
-    const updated = saveToLeaderboard({
-      name: name.toUpperCase().slice(0, 10), score, difficulty, maxCombo,
-      date: new Date().toLocaleDateString(),
-    });
-    setLeaderboard(updated); setShowNameInput(false);
+    const name = (playerName.trim() || "ANON").toUpperCase().slice(0, 10);
+    const date = new Date().toLocaleDateString();
+    if (mode === "endless") {
+      const updated = saveToEndlessLeaderboard({
+        name, survivalMs: survivalMsRef.current, difficulty, rounds: round, date,
+      });
+      setEndlessLeaderboard(updated);
+      setLeaderboardTab("endless");
+    } else {
+      const updated = saveToLeaderboard({ name, score, difficulty, maxCombo, date });
+      setLeaderboard(updated);
+      setLeaderboardTab("classic");
+    }
+    setShowNameInput(false);
   };
 
   const timerPercent = maxTime > 0 ? (timeLeft / maxTime) * 100 : 0;
@@ -498,8 +594,10 @@ export default function TapOrWaitGame() {
     >
       {/* Retro grid background */}
       <div className="retro-grid" />
-      {/* Scanline overlay */}
-      {settings.scanlines && <div className="scanlines" />}
+      {/* Scanline overlay (intensity slider) */}
+      {settings.scanlineIntensity > 0 && (
+        <div className="scanlines" style={{ opacity: settings.scanlineIntensity / 100 }} />
+      )}
       {/* Particles */}
       {particles.map(p => (
         <div
@@ -514,25 +612,37 @@ export default function TapOrWaitGame() {
       ))}
 
       {/* Power-up pickups */}
-      {powerUpPickups.map(pickup => (
-        <div
-          key={pickup.id}
-          className="absolute z-30 cursor-pointer animate-pulse-ring"
-          style={{ left: `${pickup.x}%`, top: `${pickup.y}%` }}
-          onPointerDown={(e) => { e.stopPropagation(); collectPowerUp(pickup); }}
-        >
+      {powerUpPickups.map(pickup => {
+        const pcfg = POWER_UP_CONFIG[pickup.type];
+        return (
           <div
-            className="w-12 h-12 rounded-full flex items-center justify-center text-xl border-2 backdrop-blur-sm"
-            style={{
-              backgroundColor: `${POWER_UP_CONFIG[pickup.type].color.replace(")", " / 0.2)")}`,
-              borderColor: POWER_UP_CONFIG[pickup.type].color,
-              boxShadow: `0 0 15px ${POWER_UP_CONFIG[pickup.type].color}, 0 0 30px ${POWER_UP_CONFIG[pickup.type].color.replace(")", " / 0.3)")}`,
-            }}
+            key={pickup.id}
+            className="absolute z-30 cursor-pointer animate-pulse-ring flex flex-col items-center gap-1"
+            style={{ left: `${pickup.x}%`, top: `${pickup.y}%` }}
+            onPointerDown={(e) => { e.stopPropagation(); collectPowerUp(pickup); }}
           >
-            {POWER_UP_CONFIG[pickup.type].icon}
+            <div
+              className="w-12 h-12 rounded-full flex items-center justify-center text-xl border-2 backdrop-blur-sm"
+              style={{
+                backgroundColor: `${pcfg.color.replace(")", " / 0.2)")}`,
+                borderColor: pcfg.color,
+                boxShadow: `0 0 15px ${pcfg.color}, 0 0 30px ${pcfg.color.replace(")", " / 0.3)")}`,
+              }}
+            >
+              {pcfg.icon}
+            </div>
+            <span
+              className="font-display text-[9px] font-bold whitespace-nowrap px-1.5 py-0.5 rounded"
+              style={{ color: pcfg.color, backgroundColor: "hsl(240 15% 6% / 0.7)" }}
+            >
+              {pcfg.label}
+            </span>
+            <span className="font-display text-[8px] text-muted-foreground whitespace-nowrap">
+              {pcfg.desc}
+            </span>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Power-up notice */}
       {powerUpNotice && (
@@ -693,7 +803,12 @@ export default function TapOrWaitGame() {
               TUTORIAL
             </button>
             <button
-              onClick={() => { setLeaderboard(getLeaderboard()); setPhase("leaderboard"); }}
+              onClick={() => {
+                setLeaderboard(getLeaderboard());
+                setEndlessLeaderboard(getEndlessLeaderboard());
+                setLeaderboardTab(mode);
+                setPhase("leaderboard");
+              }}
               className="px-5 py-2 font-display text-xs text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
             >
               LEADERBOARD
@@ -915,45 +1030,77 @@ export default function TapOrWaitGame() {
       )}
 
       {/* LEADERBOARD */}
-      {phase === "leaderboard" && (
-        <div className="flex flex-col items-center gap-4 z-10 px-6 max-w-sm w-full">
-          <h2 className="font-display font-bold text-3xl text-accent text-glow-gold">
-            LEADERBOARD
-          </h2>
-          {leaderboard.length === 0 ? (
-            <p className="text-muted-foreground text-sm font-display mt-4">No scores yet. Play to get on the board!</p>
-          ) : (
-            <div className="w-full flex flex-col gap-1 mt-2">
-              <div className="flex items-center gap-2 px-3 py-1 text-muted-foreground font-display text-[10px] uppercase tracking-wider">
-                <span className="w-6">#</span>
-                <span className="flex-1">NAME</span>
-                <span className="w-16 text-right">SCORE</span>
-                <span className="w-12 text-right">COMBO</span>
-                <span className="w-12 text-right">DIFF</span>
-              </div>
-              {leaderboard.map((entry, i) => (
-                <div key={i}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-lg font-display text-xs ${
-                    i === 0 ? "bg-accent/10 border border-accent/30 text-accent"
-                    : i === 1 ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
-                    : i === 2 ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
-                    : "bg-card/50 text-muted-foreground"
-                  }`}>
-                  <span className="w-6 font-bold">{i + 1}</span>
-                  <span className="flex-1 truncate">{entry.name}</span>
-                  <span className="w-16 text-right font-bold">{entry.score}</span>
-                  <span className="w-12 text-right">{entry.maxCombo}x</span>
-                  <span className="w-12 text-right text-[10px]">{DIFFICULTY_CONFIG[entry.difficulty]?.label || "?"}</span>
-                </div>
+      {phase === "leaderboard" && (() => {
+        const isEndless = leaderboardTab === "endless";
+        const list: (LeaderboardEntry | EndlessLeaderboardEntry)[] = isEndless ? endlessLeaderboard : leaderboard;
+        return (
+          <div className="flex flex-col items-center gap-4 z-10 px-6 max-w-sm w-full">
+            <h2 className="font-display font-bold text-3xl text-accent text-glow-gold">
+              LEADERBOARD
+            </h2>
+            {/* Tabs */}
+            <div className="flex gap-2">
+              {(["classic", "endless"] as GameMode[]).map(t => (
+                <button
+                  key={t}
+                  onClick={() => setLeaderboardTab(t)}
+                  className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
+                    leaderboardTab === t
+                      ? t === "classic"
+                        ? "bg-primary/20 text-primary border border-primary/50 glow-cyan"
+                        : "bg-secondary/20 text-secondary border border-secondary/50 glow-magenta"
+                      : "bg-muted text-muted-foreground border border-border"
+                  }`}
+                >
+                  {t === "classic" ? "CLASSIC" : "ENDLESS"}
+                </button>
               ))}
             </div>
-          )}
-          <button onClick={() => setPhase("menu")}
-            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
-            BACK
-          </button>
-        </div>
-      )}
+            {list.length === 0 ? (
+              <p className="text-muted-foreground text-sm font-display mt-4 text-center">
+                No {isEndless ? "endless" : "classic"} scores yet.<br/>Play to get on the board!
+              </p>
+            ) : (
+              <div className="w-full flex flex-col gap-1 mt-2">
+                <div className="flex items-center gap-2 px-3 py-1 text-muted-foreground font-display text-[10px] uppercase tracking-wider">
+                  <span className="w-6">#</span>
+                  <span className="flex-1">NAME</span>
+                  <span className="w-16 text-right">{isEndless ? "TIME" : "SCORE"}</span>
+                  <span className="w-12 text-right">{isEndless ? "RDS" : "COMBO"}</span>
+                  <span className="w-12 text-right">DIFF</span>
+                </div>
+                {list.map((entry, i) => (
+                  <div key={i}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg font-display text-xs ${
+                      i === 0 ? "bg-accent/10 border border-accent/30 text-accent"
+                      : i === 1 ? "bg-foreground/5 border border-foreground/10 text-foreground/80"
+                      : i === 2 ? "bg-secondary/5 border border-secondary/10 text-secondary/80"
+                      : "bg-card/50 text-muted-foreground"
+                    }`}>
+                    <span className="w-6 font-bold">{i + 1}</span>
+                    <span className="flex-1 truncate">{entry.name}</span>
+                    <span className="w-16 text-right font-bold">
+                      {isEndless
+                        ? `${((entry as EndlessLeaderboardEntry).survivalMs / 1000).toFixed(1)}s`
+                        : (entry as LeaderboardEntry).score}
+                    </span>
+                    <span className="w-12 text-right">
+                      {isEndless
+                        ? (entry as EndlessLeaderboardEntry).rounds
+                        : `${(entry as LeaderboardEntry).maxCombo}x`}
+                    </span>
+                    <span className="w-12 text-right text-[10px]">{DIFFICULTY_CONFIG[entry.difficulty]?.label || "?"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setPhase("menu")}
+              className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
+              BACK
+            </button>
+          </div>
+        );
+      })()}
 
       {/* SETTINGS */}
       {phase === "settings" && (
@@ -965,8 +1112,7 @@ export default function TapOrWaitGame() {
             {([
               { key: "sound", label: "🔊 SOUND EFFECTS", desc: "Synth tones on actions" },
               { key: "haptics", label: "📳 HAPTIC FEEDBACK", desc: "Vibrate on tap & events" },
-              { key: "scanlines", label: "📺 SCANLINE EFFECT", desc: "Retro CRT overlay" },
-            ] as { key: keyof GameSettings; label: string; desc: string }[]).map(item => (
+            ] as { key: "sound" | "haptics"; label: string; desc: string }[]).map(item => (
               <button
                 key={item.key}
                 onClick={() => setSettings(s => ({ ...s, [item.key]: !s[item.key] }))}
@@ -981,6 +1127,33 @@ export default function TapOrWaitGame() {
                 </div>
               </button>
             ))}
+
+            {/* Scanline intensity slider */}
+            <div className="flex flex-col gap-2 px-4 py-3 bg-card border border-border rounded-xl">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col items-start">
+                  <span className="font-display font-bold text-sm text-foreground">📺 SCANLINE INTENSITY</span>
+                  <span className="text-muted-foreground text-[10px]">Tune CRT overlay strength (Samsung-friendly)</span>
+                </div>
+                <span className="font-display text-xs text-primary text-glow-cyan tabular-nums">
+                  {settings.scanlineIntensity === 0 ? "OFF" : `${settings.scanlineIntensity}%`}
+                </span>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                step={5}
+                value={settings.scanlineIntensity}
+                onChange={(e) => setSettings(s => ({ ...s, scanlineIntensity: parseInt(e.target.value) }))}
+                className="w-full accent-primary cursor-pointer"
+              />
+              <div className="flex justify-between text-[9px] text-muted-foreground font-display">
+                <span>OFF</span>
+                <span>SUBTLE</span>
+                <span>FULL</span>
+              </div>
+            </div>
           </div>
           <button onClick={() => setPhase("menu")}
             className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
