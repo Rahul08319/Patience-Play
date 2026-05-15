@@ -63,6 +63,23 @@ const DIFFICULTY_CONFIG: Record<Difficulty, { label: string; baseTime: number; m
   hard: { label: "HARD", baseTime: 1400, minTime: 500, decay: 100, fakeAfterRound: 1, fakeChance: 0.7, powerUpChance: 0.12 },
 };
 
+// Endless mode: per-difficulty spawn chance + weighted rarity per power-up type.
+// Higher weight = more common. Extra-life is rarer on easy (don't need it) and more
+// generous on hard (more deaths). Time-freeze is more useful as time pressure ramps.
+const ENDLESS_POWER_UP_WEIGHTS: Record<Difficulty, { chance: number; weights: Record<PowerUpType, number> }> = {
+  easy:   { chance: 0.30, weights: { time_freeze: 2, double_points: 4, extra_life: 1 } },
+  normal: { chance: 0.22, weights: { time_freeze: 3, double_points: 2, extra_life: 2 } },
+  hard:   { chance: 0.18, weights: { time_freeze: 4, double_points: 2, extra_life: 3 } },
+};
+
+function pickWeighted<K extends string>(weights: Record<K, number>): K {
+  const entries = Object.entries(weights) as [K, number][];
+  const total = entries.reduce((s, [, w]) => s + w, 0);
+  let r = Math.random() * total;
+  for (const [k, w] of entries) { r -= w; if (r <= 0) return k; }
+  return entries[0][0];
+}
+
 const POWER_UP_CONFIG: Record<PowerUpType, { label: string; icon: string; color: string; desc: string; duration: number }> = {
   time_freeze: { label: "TIME FREEZE", icon: "❄️", color: "hsl(200 100% 70%)", desc: "+50% time", duration: 3 },
   double_points: { label: "2× POINTS", icon: "⚡", color: "hsl(45 100% 55%)", desc: "Double score", duration: 3 },
