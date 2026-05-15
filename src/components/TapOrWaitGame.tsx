@@ -374,6 +374,7 @@ export default function TapOrWaitGame() {
     setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
     setExtraLives(0); setPowerUpNotice(null);
     setSurvivalMs(0);
+    survivalMsRef.current = 0;
     survivalStartRef.current = Date.now();
     setPhase("countdown"); setCountdown(3);
   };
@@ -382,7 +383,11 @@ export default function TapOrWaitGame() {
   useEffect(() => {
     if (mode !== "endless") return;
     if (phase !== "playing" && phase !== "result") return;
-    const id = setInterval(() => setSurvivalMs(Date.now() - survivalStartRef.current), 100);
+    const id = setInterval(() => {
+      const ms = Date.now() - survivalStartRef.current;
+      survivalMsRef.current = ms;
+      setSurvivalMs(ms);
+    }, 100);
     return () => clearInterval(id);
   }, [mode, phase]);
 
