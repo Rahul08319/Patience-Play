@@ -1,73 +1,81 @@
-# Welcome to your Lovable project
+# Tap or Wait
 
-## Project info
+> A neon reflex game where the quickest move is sometimes doing nothing.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+![React](https://img.shields.io/badge/React-18-61dafb?logo=react&logoColor=white) ![TypeScript](https://img.shields.io/badge/TypeScript-5-3178c6?logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-5-646cff?logo=vite&logoColor=white) ![YouTube Playables](https://img.shields.io/badge/YouTube-Playables-ff0000?logo=youtube&logoColor=white)
 
-## How can I edit this code?
+**Tap or Wait** is a touch-first reaction game designed for phones, desktops, and the YouTube Playables canvas. Tap cyan rounds, resist gold rounds, spot fake-outs, build combos, and choose the difficulty that matches your nerve.
 
-There are several ways of editing your application.
+## Highlights
 
-**Use Lovable**
+- Three game modes: Classic, Endless, and a deterministic Daily Challenge.
+- Daily challenges replay the same round, fake-out, and power-up sequence for every player on the same UTC date.
+- Local leaderboards with YouTube Playables cloud-save support for player progress.
+- English, Spanish, and Hindi gameplay copy selected from the YouTube locale.
+- Accessibility options: high contrast, reduced motion, haptic toggle, scanline strength, and distinct audio cues.
+- Touch, mouse, keyboard (`Space`/`Enter`), `Esc` menu dismissal, and `F` fullscreen support.
+- No ads, rewarded ads, interstitials, or other monetization integrations.
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Run locally
 
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+```bash
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Open the local URL printed by Vite. Build and test with:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+npm test
+npm run build
+```
 
-**Use GitHub Codespaces**
+## YouTube Playables integration
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The SDK script is loaded ahead of the app bundle in `index.html`. The integration layer in `src/lib/youtubePlayables.ts` handles:
 
-## What technologies are used for this project?
+- `firstFrameReady()` followed by `gameReady()` only after the game is interactable.
+- `loadData()` and `saveData()` with a browser-local fallback during development.
+- YouTube-controlled audio state and audio-change events.
+- SDK pause/resume callbacks and a pause-safe game timer.
+- YouTube locale lookup, health logging, and score reporting.
 
-This project is built with:
+The game intentionally contains **no** `ytgame.ads` calls.
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Playables test-suite checklist
 
-## How can I deploy this project?
+1. Create/upload a release in the [YouTube Playables Developer Portal](https://www.youtube.com/playables_portal).
+2. Open the portal-provided **Test Suite Link** and point it to the uploaded release or your local server.
+3. Verify SDK loading, ready notifications, cloud save, audio controls, pause/resume, and score submission.
+4. Test touch and mouse controls at 9:32, 9:21, 9:16, 3:4, 1:1, 4:3, 16:9, and ultrawide aspect ratios.
+5. Test desktop web plus YouTube mobile web, Android, and iOS using the portal-provided Dev Link.
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+The repository can validate its build and unit tests locally; final certification runs only in the YouTube Playables Developer Portal with an onboarded channel.
 
-## Can I connect a custom domain to my Lovable project?
+## Project structure
 
-Yes, you can!
+```text
+src/
+  components/TapOrWaitGame.tsx  # Gameplay, UI, controls, accessibility
+  lib/youtubePlayables.ts       # Safe SDK adapter and cloud persistence
+  lib/localization.ts           # Locale selection and translated copy
+  index.css                     # Responsive neon design system
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Design principles
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Full-viewport layout that adapts to portrait, landscape, and extreme Playables aspect ratios.
+- Clear, high-contrast prompts and large touch targets.
+- A short guided tutorial before the first game.
+- No in-game external links, sharing prompts, user agreements, or exit controls that could conflict with YouTube UI.
+
+## Ideas for the next release
+
+- A real cross-player daily board backed by a server/database.
+- Achievement badges and a weekly quest path.
+- More translations, including Arabic and Japanese.
+- Color-blind palettes and remappable keyboard controls.
+
+## Credits
+
+Built by Rahul Kumar with React, TypeScript, Vite, Tailwind CSS, and the YouTube Playables SDK.

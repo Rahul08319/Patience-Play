@@ -1,8 +1,61 @@
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Space+Mono:wght@400;700&display=swap');
+.reduce-motion *,
+.reduce-motion *::before,
+.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}
+
+.high-contrast {
+  --background: 0 0% 0%;
+  --foreground: 0 0% 100%;
+  --card: 0 0% 7%;
+  --muted: 0 0% 16%;
+  --muted-foreground: 0 0% 82%;
+  --primary: 180 100% 66%;
+  --secondary: 315 100% 72%;
+  --accent: 48 100% 68%;
+  --border: 0 0% 72%;
+}
+
+.game-shell {
+  min-height: 100dvh;
+  min-height: -webkit-fill-available;
+  padding-top: env(safe-area-inset-top);
+  padding-right: env(safe-area-inset-right);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+}
+
+.game-shell button,
+.game-shell input[type="range"] {
+  min-height: 44px;
+}
+
+.game-shell button:focus-visible,
+.game-shell input:focus-visible {
+  outline: 3px solid hsl(var(--accent));
+  outline-offset: 3px;
+}
+
+@media (max-height: 520px) {
+  .game-shell > .menu-panel {
+    transform: scale(0.86);
+  }
+}
+
+@media (min-aspect-ratio: 2/1) {
+  .game-shell .retro-grid {
+    background-size: 52px 52px;
+  }
+}
 
 @layer base {
   :root {
