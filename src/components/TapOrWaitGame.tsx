@@ -313,6 +313,7 @@ export default function TapOrWaitGame() {
   const survivalMsRef = useRef(0);
   const noticeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const continuationTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const pickupExpiryTimersRef = useRef<NodeJS.Timeout[]>([]);
   const phaseRef = useRef<GamePhase>(phase);
   const shouldRestartRoundRef = useRef(false);
   const persistentDataRef = useRef({ version: 1 } as import("@/lib/youtubePlayables").PlayablesSaveData);
@@ -355,6 +356,8 @@ export default function TapOrWaitGame() {
     if (fakeTimerRef.current) clearTimeout(fakeTimerRef.current);
     if (continuationTimerRef.current) clearTimeout(continuationTimerRef.current);
     if (noticeTimeoutRef.current) clearTimeout(noticeTimeoutRef.current);
+    pickupExpiryTimersRef.current.forEach((timer) => clearTimeout(timer));
+    pickupExpiryTimersRef.current = [];
   }, []);
 
   useEffect(() => {
@@ -443,9 +446,11 @@ export default function TapOrWaitGame() {
     const pcfg = POWER_UP_CONFIG[type];
     showNotice(`${pcfg.icon} ${pcfg.label} — ${pcfg.desc}`);
     // Auto-remove after 3 seconds if not collected
-    setTimeout(() => {
+    const expiryTimer = setTimeout(() => {
       setPowerUpPickups(prev => prev.filter(p => p.id !== pickup.id));
+      pickupExpiryTimersRef.current = pickupExpiryTimersRef.current.filter((timer) => timer !== expiryTimer);
     }, 3000);
+    pickupExpiryTimersRef.current.push(expiryTimer);
   }, [config.powerUpChance, mode, difficulty, showNotice, random]);
 
   const collectPowerUp = useCallback((pickup: PowerUpPickup) => {
@@ -763,6 +768,7 @@ export default function TapOrWaitGame() {
 
   return (
     <div
+      data-testid="game-shell"
       className={`game-shell fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden transition-transform duration-75 ${screenShake ? "animate-shake" : ""} ${settings.reducedMotion ? "reduce-motion" : ""} ${settings.highContrast ? "high-contrast" : ""}`}
       onPointerDown={phase === "playing" && !isPlatformPaused ? handleTap : undefined}
     >
@@ -970,8 +976,18 @@ export default function TapOrWaitGame() {
             ))}
           </div>
 
+          {mode === "daily" && (
+            <div data-testid="daily-challenge-card" className="w-full max-w-xs rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-center shadow-[0_0_28px_hsl(45_100%_55%_/_0.12)]">
+              <div className="font-display text-[10px] tracking-[0.24em] text-accent">DAILY SIGNAL</div>
+              <div className="mt-1 font-display text-sm text-foreground">{dailySeed}</div>
+              <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">One shared sequence. One chance to climb today&apos;s board.</div>
+            </div>
+          )}
+
           <button
             onClick={startGame}
+            data-testid="play-button"
+            aria-label={copy.play}
             className="mt-2 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
           >
             {copy.play}
@@ -1346,6 +1362,8 @@ export default function TapOrWaitGame() {
               🌐 {copy.auto}: {locale}
             </div>
           </div>
+
+          <div className="font-display text-[9px] tracking-wide text-muted-foreground/80">SPACE / ENTER TO TAP · F FOR FULLSCREEN</div>
           <button onClick={() => setPhase("menu")}
             className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
             {copy.back}

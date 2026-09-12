@@ -12,3 +12,8 @@ Original prompt: Add all applicable YouTube Playables SDK requirements to https:
 - Added SDK-locale UI copy and localized gameplay prompts/tutorials for English, Spanish, and Hindi.
 - Added reduced motion, high contrast, and accessible distinct sound-cue options; these persist in the Playables save.
 - Verified with Vitest (3 passing tests) and a successful production Vite build.
+
+2026-09-12
+- Added viewport-safe controls, keyboard/fullscreen support, text-state output for automation, and pause cleanup for score/progression timers.
+- Added a visible Daily Challenge briefing card and a controls hint to the menu.
+- Final production build completed successfully after the responsiveness/pause polish.
