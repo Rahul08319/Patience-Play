@@ -749,7 +749,7 @@ export default function TapOrWaitGame() {
   }, [phase, isPlatformPaused, handleTap]);
 
   useEffect(() => {
-    if (!isPlatformPaused || !shouldRestartRoundRef.current) return;
+    if (isPlatformPaused || !shouldRestartRoundRef.current) return;
     shouldRestartRoundRef.current = false;
     startRound(round);
   }, [isPlatformPaused, round, startRound]);

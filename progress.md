@@ -16,4 +16,5 @@ Original prompt: Add all applicable YouTube Playables SDK requirements to https:
 2026-09-12
 - Added viewport-safe controls, keyboard/fullscreen support, text-state output for automation, and pause cleanup for score/progression timers.
 - Added a visible Daily Challenge briefing card and a controls hint to the menu.
+- Fixed Playables pause/resume lifecycle so an interrupted round restarts only after `onResume`, never while the game is still paused.
 - Final production build completed successfully after the responsiveness/pause polish.
