@@ -1,0 +1,26 @@
+{
+  "name": "Tap or Wait - Reflex & Patience Game",
+  "short_name": "TapOrWait",
+  "description": "A high-octane reflex and patience arcade game with neon aesthetic and Apple fluid design. Playable across YouTube, Facebook, Poki, CrazyGames, Yandex, Discord, JioGames, Microsoft Store, and Web.",
+  "start_url": "/",
+  "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone", "minimal-ui"],
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "any",
+  "categories": ["games", "arcade"],
+  "icons": [
+    {
+      "src": "/placeholder.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/placeholder.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

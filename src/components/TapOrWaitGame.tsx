@@ -1,12 +1,20 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   initializePlayables,
+  isInPlayablesEnvironment,
   loadGameData,
+  logHealthError,
+  logHealthWarning,
   notifyGameReady,
+  openYouTubeContent,
+  requestInterstitialAd,
+  requestRewardedAd,
   saveGameData,
   sendBestScore,
   subscribeToSystemEvents,
 } from "@/lib/youtubePlayables";
+import { platformManager, PLATFORM_REGISTRY } from "@/lib/platform/platformManager";
+import { PlatformId } from "@/lib/platform/types";
 import { getCopy, getPrompts, getTutorialSteps } from "@/lib/localization";
 
 declare global {
@@ -197,7 +205,9 @@ function playSound(type: "success" | "fail" | "tap" | "combo" | "powerup") {
         osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
         break;
     }
-  } catch {}
+  } catch {
+    logHealthWarning();
+  }
 }
 
 interface Particle {
@@ -302,10 +312,21 @@ export default function TapOrWaitGame() {
   const [activePowerUps, setActivePowerUps] = useState<ActivePowerUp[]>([]);
   const [powerUpPickups, setPowerUpPickups] = useState<PowerUpPickup[]>([]);
   const [extraLives, setExtraLives] = useState(0);
+  const [hasUsedRewardedRevive, setHasUsedRewardedRevive] = useState(false);
+  const [isAdLoading, setIsAdLoading] = useState(false);
   const [powerUpNotice, setPowerUpNotice] = useState<string | null>(null);
+  const [activePlatform, setActivePlatform] = useState(() => platformManager.getActivePlatform());
+
+  const handleSwitchPlatform = (id: PlatformId) => {
+    platformManager.setPlatformOverride(id);
+    const updated = platformManager.getActivePlatform();
+    setActivePlatform(updated);
+    showNotice(`🕹️ Engine: ${updated.name}`);
+  };
 
   const particleIdRef = useRef(0);
   const pickupIdRef = useRef(0);
+  const lastInterstitialAdRef = useRef(0);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const waitTimerRef = useRef<NodeJS.Timeout | null>(null);
   const fakeTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -369,6 +390,7 @@ export default function TapOrWaitGame() {
     let unsubscribe = () => {};
 
     const boot = async () => {
+      await platformManager.init();
       const [saved, system] = await Promise.all([loadGameData(), initializePlayables()]);
       if (!mounted) return;
 
@@ -388,6 +410,7 @@ export default function TapOrWaitGame() {
           clearAllTimers();
           setParticles([]);
           void saveGameData(persistentDataRef.current);
+          void platformManager.saveData(persistentDataRef.current);
           setIsPlatformPaused(true);
         },
         onResume: () => setIsPlatformPaused(false),
@@ -400,7 +423,10 @@ export default function TapOrWaitGame() {
   }, [clearAllTimers]);
 
   useEffect(() => {
-    if (!isInitializing) notifyGameReady();
+    if (!isInitializing) {
+      notifyGameReady();
+      platformManager.gameReady();
+    }
   }, [isInitializing]);
 
   const spawnParticles = useCallback((color: string) => {
@@ -493,6 +519,8 @@ export default function TapOrWaitGame() {
     setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
     setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
     setExtraLives(0); setPowerUpNotice(null);
+    setHasUsedRewardedRevive(false);
+    setIsAdLoading(false);
     setSurvivalMs(0);
     survivalMsRef.current = 0;
     survivalStartRef.current = Date.now();
@@ -521,7 +549,10 @@ export default function TapOrWaitGame() {
   useEffect(() => {
     const data = { version: 1 as const, settings, highScore, leaderboard, endlessLeaderboard, dailyLeaderboard };
     persistentDataRef.current = data;
-    if (!isInitializing) void saveGameData(data);
+    if (!isInitializing) {
+      void saveGameData(data);
+      void platformManager.saveData(data);
+    }
   }, [isInitializing, settings, highScore, leaderboard, endlessLeaderboard, dailyLeaderboard]);
 
   // Countdown
@@ -631,6 +662,12 @@ export default function TapOrWaitGame() {
       playSound("fail"); vibrate([50, 30, 50, 30, 80]);
       triggerShake(); spawnParticles("hsl(0 85% 55%)");
       setCombo(0); setRoundResult("fail"); setPhase("gameover");
+      const now = Date.now();
+      if (now - lastInterstitialAdRef.current > 45000 && currentRound >= 3) {
+        lastInterstitialAdRef.current = now;
+        void requestInterstitialAd();
+        void platformManager.showInterstitial();
+      }
       setScore(prev => {
         if (prev > highScore) {
           setHighScore(prev);
@@ -647,6 +684,41 @@ export default function TapOrWaitGame() {
       });
     }
   }, [clearAllTimers, highScore, startRound, maxCombo, triggerShake, spawnParticles, tickPowerUps, hasActivePowerUp, extraLives, mode, showNotice, dailySeed]);
+
+  const handleWatchRewardedAdRevive = async () => {
+    setIsAdLoading(true);
+    try {
+      const earned = (await requestRewardedAd("second-chance-revive")) || (await platformManager.showRewarded("second-chance-revive"));
+      if (earned) {
+        setHasUsedRewardedRevive(true);
+        setExtraLives(1);
+        playSound("powerup");
+        vibrate([20, 10, 20, 10, 20]);
+        showNotice("💜 REVIVED! EXTRA LIFE ACTIVE — KEEP GOING!");
+        spawnParticles("hsl(320 100% 60%)");
+        setRoundResult(null);
+        setPhase("countdown");
+        setCountdown(2);
+      } else {
+        showNotice("Ad was not completed or reward unavailable");
+      }
+    } catch {
+      logHealthWarning();
+      showNotice("Unable to load ad at this time");
+    } finally {
+      setIsAdLoading(false);
+    }
+  };
+
+  const handleReturnToMenu = () => {
+    const now = Date.now();
+    if (now - lastInterstitialAdRef.current > 45000 && round >= 3) {
+      lastInterstitialAdRef.current = now;
+      void requestInterstitialAd();
+      void platformManager.showInterstitial();
+    }
+    setPhase("menu");
+  };
 
   const handleTap = useCallback(() => {
     if (phase !== "playing" || tapped) return;
@@ -699,6 +771,7 @@ export default function TapOrWaitGame() {
       setHighScore(score);
       localStorage.setItem("tapOrWait_highScore", score.toString());
       void sendBestScore(score);
+      void platformManager.submitScore(score);
     }
   }, [phase, score, highScore]);
 
@@ -852,6 +925,23 @@ export default function TapOrWaitGame() {
         />
       </div>
 
+      {/* Apple Dynamic Island Platform Indicator */}
+      <div
+        className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-1.5 apple-glass-pill text-[11px] font-display text-muted-foreground tracking-wider cursor-pointer hover:border-primary/40 transition-all apple-spring shadow-lg"
+        onClick={() => {
+          if (phase === "menu") setPhase("settings");
+        }}
+        title="Active Gaming Platform Engine (Click to Switch in Settings)"
+      >
+        <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: activePlatform.color }} />
+        <span className="text-foreground font-semibold flex items-center gap-1.5">
+          <span>{activePlatform.icon}</span>
+          <span>{activePlatform.shortName}</span>
+        </span>
+        <span className="opacity-30">•</span>
+        <span className="text-primary text-[10px] font-bold">{activePlatform.hasAds ? "ADS ON" : "NATIVE"}</span>
+      </div>
+
       {/* Header */}
       {(phase === "playing" || phase === "result") && (
         <div className="absolute top-6 left-0 right-0 flex justify-between items-start px-6 z-10">
@@ -929,7 +1019,7 @@ export default function TapOrWaitGame() {
 
       {/* MENU */}
       {phase === "menu" && (
-        <div className="menu-panel flex max-h-full flex-col items-center gap-4 overflow-y-auto px-6 py-5 z-10">
+        <div className="menu-panel apple-glass flex max-h-full flex-col items-center gap-4 overflow-y-auto px-6 py-6 md:px-8 md:py-8 z-10 max-w-md w-full my-auto shadow-2xl">
           <h1 className="font-display font-black text-[clamp(2.5rem,13vw,5rem)] text-primary text-glow-cyan tracking-wider">
             {copy.title}
           </h1>
@@ -1218,11 +1308,21 @@ export default function TapOrWaitGame() {
             </div>
           )}
 
+          {!hasUsedRewardedRevive && round > 0 && (
+            <button
+              onClick={handleWatchRewardedAdRevive}
+              disabled={isAdLoading}
+              className="mt-2 flex items-center justify-center gap-2 w-full max-w-xs px-6 py-3.5 bg-gradient-to-r from-secondary/25 to-primary/25 border border-secondary text-secondary font-display font-bold text-xs uppercase tracking-wider rounded-xl glow-magenta hover:bg-secondary/35 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+            >
+              <span>{isAdLoading ? "⏳ Requesting Ad..." : "📺 Revive & Continue (+1 Life)"}</span>
+            </button>
+          )}
+
           <button onClick={startGame}
             className="mt-3 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform">
             {copy.retry}
           </button>
-          <button onClick={() => setPhase("menu")}
+          <button onClick={handleReturnToMenu}
             className="px-6 py-2 font-display text-xs text-muted-foreground hover:text-foreground transition-colors">
             {copy.menu}
           </button>
@@ -1361,11 +1461,52 @@ export default function TapOrWaitGame() {
             <div className="px-4 py-3 bg-card border border-border rounded-xl font-display text-xs text-muted-foreground">
               🌐 {copy.auto}: {locale}
             </div>
+
+            {/* Apple Platform Engine Switcher Bento Tile */}
+            <div className="flex flex-col gap-2.5 px-4 py-3.5 apple-glass-card border border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex flex-col items-start">
+                  <span className="font-display font-bold text-xs text-foreground flex items-center gap-1.5">
+                    <span>🕹️</span> <span>Platform Engine</span>
+                  </span>
+                  <span className="text-muted-foreground text-[10px]">Active SDK: {activePlatform.name}</span>
+                </div>
+                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-primary/20 text-primary border border-primary/40">
+                  {activePlatform.hasAds ? "Monetized" : "Native"}
+                </span>
+              </div>
+              <select
+                value={activePlatform.id}
+                onChange={(e) => handleSwitchPlatform(e.target.value as PlatformId)}
+                className="w-full mt-1 px-3 py-2 bg-background/80 border border-white/10 rounded-lg text-xs font-display text-foreground focus:outline-none focus:border-primary cursor-pointer"
+              >
+                {platformManager.getAllPlatforms().map((p) => (
+                  <option key={p.id} value={p.id} className="bg-zinc-900 text-foreground">
+                    {p.icon} {p.name}
+                  </option>
+                ))}
+              </select>
+              <div className="text-[9px] text-muted-foreground/90 font-display">
+                Zero third-party SDKs. 100% native platform engine.
+              </div>
+            </div>
+
+            <button
+              onClick={async () => {
+                const opened = await openYouTubeContent({ id: "youtube-gaming", contentType: "VIDEO" });
+                if (!opened) {
+                  window.open("https://youtube.com/gaming", "_blank");
+                }
+              }}
+              className="w-full px-4 py-3 bg-red-600/10 border border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-600/20 font-display text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 apple-spring"
+            >
+              <span>▶️ YouTube Playables Hub</span>
+            </button>
           </div>
 
           <div className="font-display text-[9px] tracking-wide text-muted-foreground/80">SPACE / ENTER TO TAP · F FOR FULLSCREEN</div>
           <button onClick={() => setPhase("menu")}
-            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all">
+            className="mt-4 px-8 py-3 bg-card text-foreground font-display font-bold text-sm rounded-xl border border-border hover:border-primary/50 hover:scale-105 active:scale-95 transition-all apple-spring">
             {copy.back}
           </button>
         </div>
