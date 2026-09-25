@@ -162,34 +162,6 @@ export async function sendBestScore(value: number): Promise<boolean> {
   }
 }
 
-export async function requestInterstitialAd(): Promise<boolean> {
-  const api = sdk();
-  if (!api?.ads?.requestInterstitialAd) return false;
-  try {
-    await api.ads.requestInterstitialAd();
-    return true;
-  } catch {
-    logHealthWarning();
-    return false;
-  }
-}
-
-export async function requestRewardedAd(rewardId: string): Promise<boolean> {
-  if (!rewardId || typeof rewardId !== "string" || rewardId.trim().length === 0) {
-    logHealthError();
-    return false;
-  }
-  const api = sdk();
-  if (!api?.ads?.requestRewardedAd) return false;
-  try {
-    const earned = await api.ads.requestRewardedAd(rewardId);
-    return Boolean(earned);
-  } catch {
-    logHealthWarning();
-    return false;
-  }
-}
-
 export async function openYouTubeContent(content: {
   id: string;
   contentType?: "PLAYABLE" | "VIDEO";

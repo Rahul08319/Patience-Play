@@ -9,8 +9,6 @@ import {
   notifyFirstFrameReady,
   notifyGameReady,
   openYouTubeContent,
-  requestInterstitialAd,
-  requestRewardedAd,
   saveGameData,
   sendBestScore,
   subscribeToSystemEvents,
@@ -30,12 +28,6 @@ describe("YouTube Playables adapter", () => {
     expect(getSdkVersion()).toBeNull();
   });
 
-  it("handles ads and monetization gracefully when SDK is absent", async () => {
-    await expect(requestInterstitialAd()).resolves.toBe(false);
-    await expect(requestRewardedAd("second-chance-revive")).resolves.toBe(false);
-    await expect(requestRewardedAd("")).resolves.toBe(false);
-  });
-
   it("forwards lifecycle, system, save, and score calls in Playables", async () => {
     const firstFrameReady = vi.fn();
     const gameReady = vi.fn();
@@ -46,8 +38,6 @@ describe("YouTube Playables adapter", () => {
     const onResume = vi.fn();
     const logError = vi.fn();
     const logWarning = vi.fn();
-    const requestInterstitial = vi.fn().mockResolvedValue(undefined);
-    const requestRewarded = vi.fn().mockResolvedValue(true);
     const openContent = vi.fn().mockResolvedValue(undefined);
 
     window.ytgame = {
@@ -73,10 +63,6 @@ describe("YouTube Playables adapter", () => {
       health: {
         logError,
         logWarning,
-      },
-      ads: {
-        requestInterstitialAd: requestInterstitial,
-        requestRewardedAd: requestRewarded,
       },
     } as unknown as typeof ytgame;
 
@@ -112,15 +98,6 @@ describe("YouTube Playables adapter", () => {
     expect(logError).toHaveBeenCalledOnce();
     expect(logWarning).toHaveBeenCalledOnce();
 
-    // Ads and engagement
-    const adResult = await requestInterstitialAd();
-    expect(adResult).toBe(true);
-    expect(requestInterstitial).toHaveBeenCalledOnce();
-
-    const rewardResult = await requestRewardedAd("second-chance-revive");
-    expect(rewardResult).toBe(true);
-    expect(requestRewarded).toHaveBeenCalledWith("second-chance-revive");
-
     const contentResult = await openYouTubeContent({ id: "video123", contentType: "VIDEO" });
     expect(contentResult).toBe(true);
     expect(openContent).toHaveBeenCalledWith({ id: "video123", contentType: "VIDEO" });
@@ -139,22 +116,4 @@ describe("YouTube Playables adapter", () => {
     expect(sendScore).not.toHaveBeenCalled();
   });
 
-  it("handles rewarded ads with reward not earned and error cases", async () => {
-    const requestRewarded = vi.fn().mockResolvedValue(false);
-    window.ytgame = {
-      IN_PLAYABLES_ENV: true,
-      ads: {
-        requestInterstitialAd: vi.fn(),
-        requestRewardedAd: requestRewarded,
-      },
-    } as unknown as typeof ytgame;
-
-    const notEarned = await requestRewardedAd("revive-try");
-    expect(notEarned).toBe(false);
-
-    // When ad throws error
-    requestRewarded.mockRejectedValueOnce(new Error("Network failed"));
-    const failedAd = await requestRewardedAd("revive-try");
-    expect(failedAd).toBe(false);
-  });
 });

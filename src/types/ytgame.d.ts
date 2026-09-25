@@ -65,30 +65,6 @@ declare namespace ytgame {
   export const IN_PLAYABLES_ENV: boolean;
 
   /**
-   * The functions and properties related to ads.
-   */
-  export namespace ads {
-    /**
-     * Requests an interstitial ad to be shown.
-     *
-     * Makes no guarantees about whether the ad was shown.
-     * Do not use this API to reward players for watching an ad.
-     */
-    export function requestInterstitialAd(): Promise<void>;
-
-    /**
-     * Requests a rewarded ad to be shown for a particular reward type.
-     *
-     * Makes no guarantees about whether the ad was shown.
-     *
-     * @param rewardId Required. An identifier which uniquely identifies the claimable reward type.
-     * @returns A promise that resolves on a successful request with value true if the user met
-     * the conditions to receive a reward, or false if they did not.
-     */
-    export function requestRewardedAd(rewardId: string): Promise<boolean>;
-  }
-
-  /**
    * The functions and properties related to player engagement.
    */
   export namespace engagement {

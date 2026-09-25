@@ -2,7 +2,7 @@
 
 # ⚡ Tap or Wait (Patience Play)
 
-> **The ultra-responsive reflex & patience arcade experience crafted with Apple Fluid Design and a Universal Multi-Platform Engine.**
+> **An ultra-responsive reflex & patience arcade experience with a polished glass-and-aurora visual system.**
 
 [![React](https://img.shields.io/badge/React-18.3-61dafb?style=for-the-badge&logo=react&logoColor=white)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.8-3178c6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
@@ -14,15 +14,6 @@
 
 <br />
 
-### Platform adapter coverage
-```
-   ┌────────────────────────────────────────────────────────────────────────┐
-   │  ▶️ YOUTUBE PLAYABLES  •  📘 FB INSTANT  •  🦊 POKI  •  🟣 CRAZYGAMES  │
-   │  🟡 YANDEX GAMES  •  🌐 GAMEDISTRIBUTION  •  💬 DISCORD ACTIVITIES     │
-   │  🇮🇳 JIOGAMES  •  🎱 Y8  •  ⚡ LAGGED  •  🪟 MICROSOFT STORE (PWA)     │
-   │        📱 HUAWEI & XIAOMI QUICK GAMES  •  👾 MSN & REDDIT GAMES        │
-   └────────────────────────────────────────────────────────────────────────┘
-```
 ### Playables highlights
 - Three game modes: Classic, Endless, and a deterministic Daily Challenge.
 - Daily challenges replay the same round, fake-out, and power-up sequence for every player on the same UTC date.
@@ -33,7 +24,7 @@
 - Touch, mouse, keyboard (`Space`/`Enter`), `Esc` menu dismissal, and `F` fullscreen support.
 - No ads, rewarded ads, interstitials, or other monetization integrations.
 
-**[🎮 Live Playable Demo](https://patience-play.vercel.app) • [📖 Documentation](#universal-multi-platform-matrix) • [🚀 Quickstart](#-quickstart)**
+**[🎮 Live Playable Demo](https://patience-play.vercel.app) • [📖 Playables support](#-youtube-playables-integration) • [🚀 Quickstart](#-quickstart)**
 
 </div>
 
@@ -43,7 +34,7 @@
 
 **Tap or Wait** is an adrenaline-fueled reaction game where quick reflexes alone aren't enough—mastering self-control is key. Tap on cyan prompts, resist on gold alerts, detect deceptive fake-outs, collect tactile power-ups, and survive progressively intense rounds.
 
-Engineered from the ground up to run across **13 leading gaming ecosystems natively**, without using Playgama or any third-party SDK aggregators, wrapped in an **Apple Design System** with liquid glass surfaces, tactile spring physics, and Dynamic Island status telemetry.
+Built for the web and YouTube Playables with responsive touch controls, local fallbacks for development, and an ad-free gameplay loop.
 
 ---
 
@@ -52,41 +43,28 @@ Engineered from the ground up to run across **13 leading gaming ecosystems nativ
 The game interface implements Apple's human interface guidelines and fluid physics:
 
 - **Liquid Glass Materials**: Translucent panels (`backdrop-filter: blur(32px) saturate(200%)`) with multi-layered specular edge highlights and subtle depth staircasing.
-- **Dynamic Island Telemetry**: Real-time status pill floating at the top of the viewport indicating the active platform runtime, monetization status, and streak multipliers.
+- **Status Pill**: A compact, non-interruptive indicator for the YouTube Playables-ready, ad-free runtime.
 - **Apple Bento Grid Layouts**: Clean, modular information tiles for game modes, daily seed challenges, accessibility preferences, and leaderboards.
 - **Interruptible Spring Physics**: Natural deceleration and direct-manipulation tactile feedback with press scaling (`active:scale-[0.965]`).
 - **OLED Dark Mode & Semantic Palette**: True-black OLED backgrounds accented by Apple System Blue (`#007aff`), Cyan, Electric Magenta, and Warm Amber.
 
 ---
 
-## 🕹️ Universal Multi-Platform Matrix
+## 🕹️ YouTube Playables focus
 
-Every platform is integrated **100% natively** without Playgama or third-party wrappers, through our modular adapter bridge (`src/lib/platform/`):
-
-| Platform | Native Bridge / Namespace | Lifecycle Events | Cloud Saves | Interstitial Ads | Rewarded Ads (Revive) | Leaderboards |
-| :--- | :--- | :---: | :---: | :---: | :---: | :---: |
-| **YouTube Playables** | `window.ytgame` (SDK v1) | `firstFrameReady`, `gameReady` | `loadData` / `saveData` (3MB) | `requestInterstitialAd` | `requestRewardedAd` | `sendScore` |
-| **Facebook Instant Games** | `window.FBInstant` (v7.1) | `initializeAsync`, `startGameAsync` | `player.setDataAsync` | `getInterstitialAdAsync` | `getRewardedVideoAsync` | `getLeaderboardAsync` |
-| **Poki** | `window.PokiSDK` | `gameLoadingFinished` | Native LocalStorage | `commercialBreak` | `rewardedBreak` | Game Scores |
-| **CrazyGames** | `window.CrazyGames.SDK` (v3) | `game.loadingStop` | `data.setItem` / `getItem` | `ad.requestAd("midgame")` | `ad.requestAd("rewarded")` | HappyTime API |
-| **Yandex Games** | `window.YaGames` | `LoadingAPI.ready` | `player.setData` | `adv.showFullscreenAdv` | `adv.showRewardedVideo` | `setLeaderboardScore` |
-| **GameDistribution** | `window.gdsdk` | `gdsdk.showAd` | Native LocalStorage | `gdsdk.showAd()` | `gdsdk.showAd('rewarded')` | Web Highscores |
-| **Discord Activities** | Embedded App SDK / RPC | `discordSdk.ready()` | Discord Storage KV | N/A (Activity Spec) | N/A (Activity Spec) | Voice Channel Board |
-| **JioGames** | `window.JioGames` | `JioGames.init()` | Cloud Save Profile | `JioGames.showAd()` | `JioGames.showRewardedAd()` | `JioGames.postScore()` |
-| **Y8 Games** | `window.ID` (ID.net) | `ID.init()` | ID Profile Data | `ID.ads.display()` | Supported Fallback | `ID.GameScore.submit()` |
-| **Lagged** | `window.LaggedAPI` | `LaggedAPI.init()` | Lagged Profile Save | `LaggedAPI.showAd()` | `LaggedAPI.showRewardAd()` | `LaggedAPI.Scores.save()` |
-| **Microsoft Store (PWA)** | `window.Windows` / PWA Manifest | `app.activated` | LocalStorage / IndexedDB | Non-intrusive Ad Sim | Simulated Revive Boost | Windows App Board |
-| **Huawei & Xiaomi Quick Games** | `window.qg` (QuickApp) | Native App Lifecycle | `qg.setStorage` | `qg.createInterstitialAd` | `qg.createRewardedVideoAd` | QuickGame Board |
-| **MSN & Reddit Games** | PostMessage / Iframe Sandbox | `GAME_READY` PostMessage | Parent PostMessage Save | `REQUEST_INTERSTITIAL` | `REQUEST_REWARDED` | `SUBMIT_SCORE` |
-| **Standalone Web** | W3C Standard Web API | DOMContentLoaded | HTML5 LocalStorage | Graceful Fallback | Second Chance Boost | Local Device Record |
-
-> 💡 **Instant Platform Switching**: Open **Settings ➔ Platform Engine** to test and preview all 13 platforms live in any browser without needing to deploy or switch environments.
+| Capability | Implementation |
+| :--- | :--- |
+| Lifecycle | `firstFrameReady()` followed by `gameReady()` once the game is usable |
+| Persistence | `loadData()` / `saveData()` with a browser-local fallback for development |
+| Device control | SDK audio state plus pause/resume handling |
+| Score | Best-score reporting through the Playables engagement API |
+| Monetization | Not implemented — no ad or revive requests are made |
 
 ---
 
-## 📺 YouTube Playables Certified Integration
+## 📺 YouTube Playables integration
 
-The repository strictly complies with the official **YouTube Playables Certification Specification**:
+The repository implements the required runtime hooks; final compatibility validation occurs in the YouTube Playables Developer Portal:
 
 ```html
 <!-- index.html: Loaded before any game code to ensure reproducible sandboxing -->
@@ -100,19 +78,9 @@ The repository strictly complies with the official **YouTube Playables Certifica
 4. **`onPause()` & `onResume()`**: Suspends tickers, saves dirty state before memory eviction, and safely restores state.
 5. **`isAudioEnabled()` & `onAudioEnabledChange()`**: Dynamically adheres to YouTube master mute preferences.
 
-### Monetization & Ads Architecture
-- **Pre-Roll Ads**: Handled automatically by the YouTube platform during initial bundle loading.
-- **Interstitial Ads**: Executed at natural gameplay breakpoints (such as Game Over after completing multiple rounds or returning to main menu) with intelligent cooldown throttling:
-  ```ts
-  await ytgame.ads.requestInterstitialAd();
-  ```
-- **Rewarded Ads ("Second Chance / Revive")**: When a player makes an error, they can choose to watch an ad to revive with +1 Extra Life without losing their score or combo streak:
-  ```ts
-  const rewardEarned = await ytgame.ads.requestRewardedAd("second-chance-revive");
-  if (rewardEarned) {
-    // Revive player, grant extra life, continue gameplay
-  }
-  ```
+### Monetization
+
+This project intentionally includes no ads, rewarded revives, interstitials, in-app purchases, or monetization SDK calls.
 
 ### Content Security Policy (CSP) Verification Guide
 When testing inside Google Chrome DevTools Overrides for Playables certification, enforce the official Playables CSP header:
@@ -176,7 +144,7 @@ Open the local URL displayed by Vite (e.g. `http://localhost:5173`).
 ```bash
 npm test
 ```
-Runs the full Vitest suite covering platform adapters, monetization flows, cloud saves, and YouTube Playables lifecycle.
+Runs the Vitest suite covering game logic, cloud saves, and the YouTube Playables lifecycle.
 
 ### 4. Build for Production
 ```bash
@@ -189,65 +157,32 @@ Creates an optimized, tree-shaken static production bundle in `dist/`.
 ## 📂 Project Architecture
 
 ```text
-### Extended platform adapters
 patience-play/
-├── public/
-│   ├── manifest.json            # PWA & Microsoft Store manifest
-│   └── favicon.ico              # Apple icon & favicon
 ├── src/
 │   ├── components/
-│   │   └── TapOrWaitGame.tsx    # Core game loop, Bento UI, Apple spring animations
+│   │   ├── TapOrWaitGame.tsx    # Gameplay, controls, and accessibility
+│   │   └── AuroraBackdrop.tsx   # Dependency-free WebGL aurora renderer
 │   ├── lib/
-│   │   ├── platform/            # 100% Native Multi-Platform Engine (Zero-Playgama)
-│   │   │   ├── types.ts         # Unified PlatformAdapter interfaces
-│   │   │   ├── platformManager.ts # Engine singleton & auto-detection
-│   │   │   └── adapters/        # 13 Dedicated platform bridges
-│   │   │       ├── youtubeAdapter.ts
-│   │   │       ├── facebookAdapter.ts
-│   │   │       ├── pokiAdapter.ts
-│   │   │       ├── crazyGamesAdapter.ts
-│   │   │       ├── yandexAdapter.ts
-│   │   │       ├── gameDistributionAdapter.ts
-│   │   │       ├── discordAdapter.ts
-│   │   │       ├── jioGamesAdapter.ts
-│   │   │       ├── y8Adapter.ts
-│   │   │       ├── laggedAdapter.ts
-│   │   │       ├── quickGamesAdapter.ts
-│   │   │       ├── webIframeAdapter.ts
-│   │   │       └── pwaAdapter.ts
-│   │   ├── youtubePlayables.ts   # Safe YouTube SDK bridge with ads & telemetry
-│   │   └── localization.ts      # Multi-language translation dictionaries
-│   ├── types/
-│   │   └── ytgame.d.ts          # Official YouTube Playables TypeScript definitions
-│   ├── index.css                # Apple Design System tokens, Liquid Glass & springs
-│   └── main.tsx                 # First frame ready notification & root mount
-├── index.html                   # Earliest SDK insertion point & CSP meta tags
+│   │   ├── youtubePlayables.ts  # Safe SDK adapter and cloud persistence
+│   │   └── localization.ts      # Translated gameplay copy
+│   ├── types/ytgame.d.ts        # Minimal SDK definitions used by the game
+│   └── index.css                # Responsive neon/glass design system
+├── index.html                   # Earliest SDK insertion point
 └── package.json
-### Core Playables files
-src/
-  components/TapOrWaitGame.tsx  # Gameplay, UI, controls, accessibility
-  components/AuroraBackdrop.tsx # Dependency-free WebGL aurora renderer
-  lib/youtubePlayables.ts       # Safe SDK adapter and cloud persistence
-  lib/localization.ts           # Locale selection and translated copy
-  index.css                     # Responsive neon design system
 ```
 
 ---
 
-### Design principles
-## 📜 License & Credits
-### Playables-focused design principles
+## 📜 Design principles
+
 - Full-viewport layout that adapts to portrait, landscape, and extreme Playables aspect ratios.
 - Clear, high-contrast prompts and large touch targets.
 - A short guided tutorial before the first game.
 - A glass-and-depth interface with intentionally restrained motion, inspired by modern native mobile interfaces.
 - No in-game external links, sharing prompts, user agreements, or exit controls that could conflict with YouTube UI.
 
-Built with ❤️ by **Rahul Kumar**.
+## ✨ Next-release ideas
 
-### License
-Licensed under the [MIT License](LICENSE).
-### Next-release ideas
 - A real cross-player daily board backed by a server/database.
 - Achievement badges and a weekly quest path.
 - More translations, including Arabic and Japanese.
