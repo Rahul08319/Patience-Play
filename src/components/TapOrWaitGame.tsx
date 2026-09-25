@@ -16,6 +16,7 @@ import {
 import { platformManager, PLATFORM_REGISTRY } from "@/lib/platform/platformManager";
 import { PlatformId } from "@/lib/platform/types";
 import { getCopy, getPrompts, getTutorialSteps } from "@/lib/localization";
+import AuroraBackdrop from "@/components/AuroraBackdrop";
 
 declare global {
   interface Window {
@@ -846,6 +847,7 @@ export default function TapOrWaitGame() {
       onPointerDown={phase === "playing" && !isPlatformPaused ? handleTap : undefined}
     >
       {/* Retro grid background */}
+      <AuroraBackdrop phase={phase} reducedMotion={settings.reducedMotion} />
       <div className="retro-grid" />
       <div className="sr-only" aria-live="polite">
         {phase === "playing" ? `${copy.round} ${round + 1}. ${prompt}` : phase === "gameover" ? copy.gameOver : ""}
@@ -1019,7 +1021,7 @@ export default function TapOrWaitGame() {
 
       {/* MENU */}
       {phase === "menu" && (
-        <div className="menu-panel apple-glass flex max-h-full flex-col items-center gap-4 overflow-y-auto px-6 py-6 md:px-8 md:py-8 z-10 max-w-md w-full my-auto shadow-2xl">
+        <div className="menu-panel apple-glass z-10 my-auto flex max-h-full w-full max-w-md flex-col items-center gap-4 overflow-y-auto px-6 py-6 shadow-2xl md:px-8 md:py-8">
           <h1 className="font-display font-black text-[clamp(2.5rem,13vw,5rem)] text-primary text-glow-cyan tracking-wider">
             {copy.title}
           </h1>
@@ -1078,7 +1080,7 @@ export default function TapOrWaitGame() {
             onClick={startGame}
             data-testid="play-button"
             aria-label={copy.play}
-            className="mt-2 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
+            className="apple-primary mt-2 px-10 py-4 font-display font-bold text-lg rounded-2xl hover:scale-[1.03] active:scale-[0.98] transition-transform"
           >
             {copy.play}
           </button>

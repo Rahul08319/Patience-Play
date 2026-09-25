@@ -14,6 +14,7 @@
 
 <br />
 
+### Platform adapter coverage
 ```
    ┌────────────────────────────────────────────────────────────────────────┐
    │  ▶️ YOUTUBE PLAYABLES  •  📘 FB INSTANT  •  🦊 POKI  •  🟣 CRAZYGAMES  │
@@ -22,6 +23,15 @@
    │        📱 HUAWEI & XIAOMI QUICK GAMES  •  👾 MSN & REDDIT GAMES        │
    └────────────────────────────────────────────────────────────────────────┘
 ```
+### Playables highlights
+- Three game modes: Classic, Endless, and a deterministic Daily Challenge.
+- Daily challenges replay the same round, fake-out, and power-up sequence for every player on the same UTC date.
+- Local leaderboards with YouTube Playables cloud-save support for player progress.
+- English, Spanish, and Hindi gameplay copy selected from the YouTube locale.
+- Accessibility options: high contrast, reduced motion, haptic toggle, scanline strength, and distinct audio cues.
+- A native WebGL aurora scene with phase-aware color, glass surfaces, and a low-power fallback for compatible mobile devices.
+- Touch, mouse, keyboard (`Space`/`Enter`), `Esc` menu dismissal, and `F` fullscreen support.
+- No ads, rewarded ads, interstitials, or other monetization integrations.
 
 **[🎮 Live Playable Demo](https://patience-play.vercel.app) • [📖 Documentation](#universal-multi-platform-matrix) • [🚀 Quickstart](#-quickstart)**
 
@@ -179,6 +189,7 @@ Creates an optimized, tree-shaken static production bundle in `dist/`.
 ## 📂 Project Architecture
 
 ```text
+### Extended platform adapters
 patience-play/
 ├── public/
 │   ├── manifest.json            # PWA & Microsoft Store manifest
@@ -212,12 +223,36 @@ patience-play/
 │   └── main.tsx                 # First frame ready notification & root mount
 ├── index.html                   # Earliest SDK insertion point & CSP meta tags
 └── package.json
+### Core Playables files
+src/
+  components/TapOrWaitGame.tsx  # Gameplay, UI, controls, accessibility
+  components/AuroraBackdrop.tsx # Dependency-free WebGL aurora renderer
+  lib/youtubePlayables.ts       # Safe SDK adapter and cloud persistence
+  lib/localization.ts           # Locale selection and translated copy
+  index.css                     # Responsive neon design system
 ```
 
 ---
 
+### Design principles
 ## 📜 License & Credits
+### Playables-focused design principles
+- Full-viewport layout that adapts to portrait, landscape, and extreme Playables aspect ratios.
+- Clear, high-contrast prompts and large touch targets.
+- A short guided tutorial before the first game.
+- A glass-and-depth interface with intentionally restrained motion, inspired by modern native mobile interfaces.
+- No in-game external links, sharing prompts, user agreements, or exit controls that could conflict with YouTube UI.
 
 Built with ❤️ by **Rahul Kumar**.
 
+### License
 Licensed under the [MIT License](LICENSE).
+### Next-release ideas
+- A real cross-player daily board backed by a server/database.
+- Achievement badges and a weekly quest path.
+- More translations, including Arabic and Japanese.
+- Color-blind palettes and remappable keyboard controls.
+
+## Credits
+
+Built by Rahul Kumar with React, TypeScript, Vite, WebGL, Tailwind CSS, and the YouTube Playables SDK.

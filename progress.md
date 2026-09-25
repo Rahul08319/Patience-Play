@@ -17,4 +17,9 @@ Original prompt: Add all applicable YouTube Playables SDK requirements to https:
 - Added viewport-safe controls, keyboard/fullscreen support, text-state output for automation, and pause cleanup for score/progression timers.
 - Added a visible Daily Challenge briefing card and a controls hint to the menu.
 - Fixed Playables pause/resume lifecycle so an interrupted round restarts only after `onResume`, never while the game is still paused.
+
+2026-09-23
+- Added a dependency-free WebGL aurora renderer: it adapts its color to game phase, caps rendering resolution for mobile performance, pauses when hidden, and renders one static frame with Reduced Motion enabled.
+- Updated the main menu with a glass-and-depth visual treatment and a tactile primary action.
+- The curated skill catalog has no Apple-design skill to install; the visual approach follows Apple-inspired design principles directly instead.
 - Final production build completed successfully after the responsiveness/pause polish.

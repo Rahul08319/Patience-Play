@@ -34,6 +34,35 @@
   padding-left: env(safe-area-inset-left);
 }
 
+.webgl-aurora {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.apple-glass {
+  width: min(100% - 2rem, 29rem);
+  border: 1px solid hsl(0 0% 100% / 0.16);
+  border-radius: 2rem;
+  background: linear-gradient(145deg, hsl(240 18% 16% / 0.78), hsl(240 18% 7% / 0.62));
+  box-shadow: 0 28px 90px hsl(240 50% 2% / 0.58), inset 0 1px 0 hsl(0 0% 100% / 0.16);
+  backdrop-filter: blur(24px) saturate(138%);
+  -webkit-backdrop-filter: blur(24px) saturate(138%);
+}
+
+.apple-primary {
+  color: hsl(240 15% 6%);
+  background: linear-gradient(135deg, hsl(174 100% 64%), hsl(194 100% 53%));
+  box-shadow: 0 14px 30px hsl(180 100% 52% / 0.22), inset 0 1px 0 hsl(0 0% 100% / 0.5);
+}
+
+.apple-primary:hover {
+  box-shadow: 0 18px 38px hsl(180 100% 52% / 0.34), inset 0 1px 0 hsl(0 0% 100% / 0.58);
+}
+
 .game-shell button,
 .game-shell input[type="range"] {
   min-height: 44px;
@@ -226,9 +255,9 @@
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(hsl(174 100% 50% / 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, hsl(174 100% 50% / 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(hsl(174 100% 80% / 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, hsl(174 100% 80% / 0.035) 1px, transparent 1px);
+  background-size: 48px 48px;
   pointer-events: none;
   z-index: 0;
 }
