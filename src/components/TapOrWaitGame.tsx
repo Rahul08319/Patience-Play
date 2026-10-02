@@ -912,8 +912,11 @@ export default function TapOrWaitGame() {
         </div>
       )}
 
-      {/* Ambient glow */}
-      <div className="absolute inset-0 pointer-events-none">
+      {/* Ambient floating glow orbs */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <div className="ambient-orb-1" />
+        <div className="ambient-orb-2" />
+        <div className="ambient-orb-3" />
         <div
           className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] rounded-full opacity-20 blur-[120px] transition-colors duration-300"
           style={{
@@ -927,19 +930,27 @@ export default function TapOrWaitGame() {
 
       {/* Apple Dynamic Island Platform Indicator */}
       <div
-        className="absolute top-3 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 px-3.5 py-1.5 apple-glass-pill text-[11px] font-display text-muted-foreground tracking-wider cursor-pointer hover:border-primary/40 transition-all apple-spring shadow-lg"
+        className="absolute top-3.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 apple-glass-pill text-[11px] font-display text-muted-foreground tracking-wider cursor-pointer hover:border-primary/50 transition-all apple-spring shadow-xl apple-specular"
         onClick={() => {
           if (phase === "menu") setPhase("settings");
         }}
-        title="Active Gaming Platform Engine (Click to Switch in Settings)"
+        title="Active Gaming Platform Engine (Click to open Settings & Switcher)"
       >
-        <span className="w-2 h-2 rounded-full animate-pulse" style={{ backgroundColor: activePlatform.color }} />
+        <span className="w-2.5 h-2.5 rounded-full animate-pulse shadow-sm" style={{ backgroundColor: activePlatform.color }} />
         <span className="text-foreground font-semibold flex items-center gap-1.5">
           <span>{activePlatform.icon}</span>
           <span>{activePlatform.shortName}</span>
         </span>
-        <span className="opacity-30">•</span>
-        <span className="text-primary text-[10px] font-bold">{activePlatform.hasAds ? "ADS ON" : "NATIVE"}</span>
+        <span className="opacity-25 text-white">|</span>
+        <span className="text-primary text-[10px] font-bold tracking-tight uppercase">
+          {activePlatform.hasAds ? "⚡ Monetized" : "🛡️ Native"}
+        </span>
+        {highScore > 0 && (
+          <>
+            <span className="opacity-25 text-white">|</span>
+            <span className="text-accent text-[10px] font-bold">🏆 {highScore}</span>
+          </>
+        )}
       </div>
 
       {/* Header */}
@@ -1019,76 +1030,116 @@ export default function TapOrWaitGame() {
 
       {/* MENU */}
       {phase === "menu" && (
-        <div className="menu-panel apple-glass flex max-h-full flex-col items-center gap-4 overflow-y-auto px-6 py-6 md:px-8 md:py-8 z-10 max-w-md w-full my-auto shadow-2xl">
-          <h1 className="font-display font-black text-[clamp(2.5rem,13vw,5rem)] text-primary text-glow-cyan tracking-wider">
-            {copy.title}
-          </h1>
-          <div className="font-display text-2xl md:text-3xl text-secondary text-glow-magenta">
-            {copy.subtitle}
-          </div>
-          <p className="text-muted-foreground text-center text-sm max-w-xs leading-relaxed mt-1">
-            {copy.intro}
-          </p>
-
-          {/* Difficulty selector */}
-          <div className="flex gap-2 mt-2">
-            {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map(d => (
-              <button
-                key={d}
-                onClick={() => setDifficulty(d)}
-                className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
-                  difficulty === d
-                    ? d === "easy" ? "bg-game-success/20 text-game-success border border-game-success/50"
-                      : d === "normal" ? "bg-primary/20 text-primary border border-primary/50 glow-cyan"
-                      : "bg-destructive/20 text-destructive border border-destructive/50"
-                    : "bg-muted text-muted-foreground border border-border hover:border-foreground/30"
-                }`}
-              >
-                {DIFFICULTY_CONFIG[d].label}
-              </button>
-            ))}
-          </div>
-
-          {/* Mode selector */}
-          <div className="flex gap-2">
-            {(["classic", "endless", "daily"] as GameMode[]).map(m => (
-              <button
-                key={m}
-                onClick={() => setMode(m)}
-                className={`px-4 py-2 rounded-lg font-display text-xs font-bold transition-all ${
-                  mode === m
-                    ? "bg-secondary/20 text-secondary border border-secondary/50 glow-magenta"
-                    : "bg-muted text-muted-foreground border border-border hover:border-foreground/30"
-                }`}
-              >
-                {m === "classic" ? copy.classic : m === "endless" ? copy.endless : `${copy.daily} ${dailySeed.slice(5)}`}
-              </button>
-            ))}
-          </div>
-
-          {mode === "daily" && (
-            <div data-testid="daily-challenge-card" className="w-full max-w-xs rounded-xl border border-accent/40 bg-accent/10 px-4 py-3 text-center shadow-[0_0_28px_hsl(45_100%_55%_/_0.12)]">
-              <div className="font-display text-[10px] tracking-[0.24em] text-accent">DAILY SIGNAL</div>
-              <div className="mt-1 font-display text-sm text-foreground">{dailySeed}</div>
-              <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">One shared sequence. One chance to climb today&apos;s board.</div>
+        <div className="menu-panel apple-glass apple-specular flex max-h-full flex-col items-center gap-3.5 overflow-y-auto px-5 py-6 md:px-7 md:py-7 z-10 max-w-md w-full my-auto shadow-2xl">
+          {/* Header & Title */}
+          <div className="flex flex-col items-center text-center">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 text-[10px] font-display text-muted-foreground tracking-widest mb-1.5">
+              <span>🍎 APPLE FLUID DESIGN</span>
+              <span>•</span>
+              <span className="text-primary font-bold">13 PLATFORMS</span>
             </div>
-          )}
+            <h1 className="font-display font-black text-[clamp(2.3rem,11vw,4.5rem)] text-primary text-glow-cyan tracking-wider leading-none">
+              {copy.title}
+            </h1>
+            <div className="font-display text-xl md:text-2xl text-secondary text-glow-magenta mt-1 tracking-wide">
+              {copy.subtitle}
+            </div>
+            <p className="text-muted-foreground text-center text-xs max-w-xs leading-relaxed mt-1.5 opacity-90">
+              {copy.intro}
+            </p>
+          </div>
 
+          {/* Bento Grid */}
+          <div className="apple-bento-grid w-full mt-1">
+            {/* Bento Card: Game Mode */}
+            <div className="apple-bento-card flex flex-col gap-2">
+              <div className="flex items-center justify-between text-[10px] font-display tracking-wider text-muted-foreground uppercase">
+                <span>Game Mode</span>
+                <span className="text-secondary font-bold">
+                  {mode === "classic" ? "Escalating Rounds" : mode === "endless" ? "Survival Clock" : "Shared Daily Seed"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5">
+                {(["classic", "endless", "daily"] as GameMode[]).map(m => (
+                  <button
+                    key={m}
+                    onClick={() => setMode(m)}
+                    className={`py-2 px-1 rounded-lg font-display text-xs font-bold transition-all apple-spring ${
+                      mode === m
+                        ? "bg-secondary/25 text-secondary border border-secondary/50 glow-magenta shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                    }`}
+                  >
+                    {m === "classic" ? copy.classic : m === "endless" ? copy.endless : `${copy.daily} ${dailySeed.slice(5)}`}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Bento Card: Difficulty */}
+            <div className="apple-bento-card flex flex-col gap-2">
+              <div className="flex items-center justify-between text-[10px] font-display tracking-wider text-muted-foreground uppercase">
+                <span>Reaction Window</span>
+                <span className="text-foreground font-bold">
+                  {difficulty === "easy" ? "3.0s (Relaxed)" : difficulty === "normal" ? "2.0s (Standard)" : "1.4s (Expert)"}
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 p-1 bg-black/40 rounded-xl border border-white/5">
+                {(Object.keys(DIFFICULTY_CONFIG) as Difficulty[]).map(d => (
+                  <button
+                    key={d}
+                    onClick={() => setDifficulty(d)}
+                    className={`py-2 px-1 rounded-lg font-display text-xs font-bold transition-all apple-spring flex items-center justify-center gap-1.5 ${
+                      difficulty === d
+                        ? d === "easy"
+                          ? "bg-game-success/20 text-game-success border border-game-success/50 shadow-sm"
+                          : d === "normal"
+                          ? "bg-primary/20 text-primary border border-primary/50 glow-cyan shadow-sm"
+                          : "bg-destructive/20 text-destructive border border-destructive/50 shadow-sm"
+                        : "text-muted-foreground hover:text-foreground hover:bg-white/5"
+                    }`}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{
+                        backgroundColor:
+                          d === "easy" ? "hsl(140 70% 50%)" : d === "normal" ? "hsl(174 100% 50%)" : "hsl(0 85% 55%)"
+                      }}
+                    />
+                    <span>{DIFFICULTY_CONFIG[d].label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Daily Challenge Card (Contextual) */}
+            {mode === "daily" && (
+              <div data-testid="daily-challenge-card" className="apple-bento-card border border-accent/40 bg-accent/10 px-4 py-3 text-center shadow-[0_0_28px_hsl(45_100%_55%_/_0.12)]">
+                <div className="font-display text-[10px] tracking-[0.24em] text-accent">DAILY SIGNAL</div>
+                <div className="mt-1 font-display text-sm text-foreground">{dailySeed}</div>
+                <div className="mt-1 text-[10px] leading-relaxed text-muted-foreground">One shared sequence. One chance to climb today&apos;s board.</div>
+              </div>
+            )}
+          </div>
+
+          {/* Primary Cupertino CTA Play Button */}
           <button
             onClick={startGame}
             data-testid="play-button"
             aria-label={copy.play}
-            className="mt-2 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform"
+            className="w-full mt-1.5 py-3.5 px-6 bg-gradient-to-r from-primary via-cyan-400 to-primary text-primary-foreground font-display font-black text-lg tracking-wider rounded-2xl glow-cyan apple-spring shadow-lg hover:brightness-110 active:scale-[0.98] apple-specular flex items-center justify-center gap-2"
           >
-            {copy.play}
+            <span>▶</span>
+            <span>{copy.play}</span>
           </button>
 
-          <div className="flex gap-3 flex-wrap justify-center">
+          {/* Secondary Action Pills Bento Row */}
+          <div className="grid grid-cols-3 gap-2 w-full">
             <button
               onClick={() => { setTutorialStep(0); setTutorialTapped(false); setTutorialWaitDone(false); setPhase("tutorial"); }}
-              className="px-5 py-2 font-display text-xs text-secondary border border-secondary/30 rounded-lg hover:bg-secondary/10 transition-colors"
+              className="py-2.5 px-2 font-display text-xs text-secondary apple-glass-card hover:bg-secondary/15 hover:border-secondary/40 transition-all apple-spring flex items-center justify-center gap-1"
             >
-              {copy.tutorial}
+              <span>📖</span> <span>{copy.tutorial}</span>
             </button>
             <button
               onClick={() => {
@@ -1098,21 +1149,22 @@ export default function TapOrWaitGame() {
                 setLeaderboardTab(mode);
                 setPhase("leaderboard");
               }}
-              className="px-5 py-2 font-display text-xs text-accent border border-accent/30 rounded-lg hover:bg-accent/10 transition-colors"
+              className="py-2.5 px-2 font-display text-xs text-accent apple-glass-card hover:bg-accent/15 hover:border-accent/40 transition-all apple-spring flex items-center justify-center gap-1"
             >
-              {copy.leaderboard}
+              <span>🏆</span> <span>{copy.leaderboard}</span>
             </button>
             <button
               onClick={() => setPhase("settings")}
-              className="px-5 py-2 font-display text-xs text-primary border border-primary/30 rounded-lg hover:bg-primary/10 transition-colors"
+              className="py-2.5 px-2 font-display text-xs text-primary apple-glass-card hover:bg-primary/15 hover:border-primary/40 transition-all apple-spring flex items-center justify-center gap-1"
             >
-              {copy.settings}
+              <span>⚙️</span> <span>{copy.settings}</span>
             </button>
           </div>
 
           {highScore > 0 && (
-            <div className="text-accent font-display text-sm text-glow-gold">
-              BEST: {highScore}
+            <div className="text-accent font-display text-xs text-glow-gold flex items-center gap-1.5 mt-0.5">
+              <span>⭐</span>
+              <span>ALL-TIME RECORD: {highScore} POINTS</span>
             </div>
           )}
         </div>
@@ -1266,34 +1318,40 @@ export default function TapOrWaitGame() {
 
       {/* GAME OVER */}
       {phase === "gameover" && (
-        <div className="flex flex-col items-center gap-5 z-10 px-6">
-          <div className="font-display font-black text-4xl md:text-6xl text-destructive" style={{ textShadow: "0 0 20px hsl(0 85% 55% / 0.8)" }}>
+        <div className="menu-panel apple-glass apple-specular flex max-h-full flex-col items-center gap-4 overflow-y-auto px-6 py-7 md:px-8 md:py-8 z-10 max-w-sm w-full my-auto shadow-2xl">
+          <div className="font-display font-black text-4xl md:text-5xl text-destructive text-center tracking-wider" style={{ textShadow: "0 0 20px hsl(0 85% 55% / 0.8)" }}>
             {copy.gameOver}
           </div>
-          <div className="flex flex-col items-center gap-2 mt-3">
-            <span className="text-muted-foreground text-sm font-display">{copy.score}</span>
-            <span className="font-display font-bold text-3xl text-foreground">{score}</span>
-          </div>
-          <div className="flex gap-8">
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-muted-foreground text-xs font-display">{copy.best}</span>
-              <span className="font-display text-accent text-glow-gold text-lg">{highScore}</span>
+
+          {/* Apple Bento Summary Card */}
+          <div className="apple-bento-card w-full flex flex-col items-center gap-3">
+            <div className="flex flex-col items-center">
+              <span className="text-muted-foreground text-[10px] font-display uppercase tracking-widest">{copy.score}</span>
+              <span className="font-display font-black text-4xl text-primary text-glow-cyan">{score}</span>
             </div>
-            <div className="flex flex-col items-center gap-1">
-              <span className="text-muted-foreground text-xs font-display">{copy.maxCombo}</span>
-              <span className="font-display text-secondary text-glow-magenta text-lg">{maxCombo}x</span>
+
+            <div className="grid grid-cols-2 gap-2 w-full pt-1 border-t border-white/5">
+              <div className="flex flex-col items-center py-1.5 px-2 bg-black/30 rounded-xl">
+                <span className="text-muted-foreground text-[9px] font-display uppercase">{copy.best}</span>
+                <span className="font-display text-accent text-glow-gold text-sm font-bold">{highScore}</span>
+              </div>
+              <div className="flex flex-col items-center py-1.5 px-2 bg-black/30 rounded-xl">
+                <span className="text-muted-foreground text-[9px] font-display uppercase">{copy.maxCombo}</span>
+                <span className="font-display text-secondary text-glow-magenta text-sm font-bold">{maxCombo}x</span>
+              </div>
             </div>
-          </div>
-          <div className="text-muted-foreground text-xs mt-1">
-            Survived {round} round{round !== 1 ? "s" : ""} on {config.label}
-            {mode === "endless" && ` • ${(survivalMs / 1000).toFixed(1)}s ENDLESS`}
-            {mode === "daily" && ` • ${copy.daily} ${dailySeed}`}
+
+            <div className="text-muted-foreground text-[10px] text-center">
+              Survived {round} round{round !== 1 ? "s" : ""} on {config.label}
+              {mode === "endless" && ` • ${(survivalMs / 1000).toFixed(1)}s ENDLESS`}
+              {mode === "daily" && ` • ${copy.daily} ${dailySeed}`}
+            </div>
           </div>
 
           {showNameInput && (
-            <div className="flex flex-col items-center gap-2 mt-2">
+            <div className="flex flex-col items-center gap-2 w-full">
               <span className="font-display text-xs text-primary text-glow-cyan">{copy.newHighScore}</span>
-              <div className="flex gap-2">
+              <div className="flex gap-2 w-full justify-center">
                 <input
                   type="text" value={playerName} onChange={e => setPlayerName(e.target.value)}
                   maxLength={10} placeholder={copy.yourName}
@@ -1301,7 +1359,7 @@ export default function TapOrWaitGame() {
                   autoFocus onKeyDown={e => e.key === "Enter" && handleSaveScore()}
                 />
                 <button onClick={handleSaveScore}
-                  className="px-4 py-2 bg-primary text-primary-foreground font-display text-xs font-bold rounded-lg hover:scale-105 active:scale-95 transition-transform">
+                  className="px-4 py-2 bg-primary text-primary-foreground font-display text-xs font-bold rounded-lg hover:scale-105 active:scale-95 transition-transform apple-spring">
                   {copy.save}
                 </button>
               </div>
@@ -1312,18 +1370,18 @@ export default function TapOrWaitGame() {
             <button
               onClick={handleWatchRewardedAdRevive}
               disabled={isAdLoading}
-              className="mt-2 flex items-center justify-center gap-2 w-full max-w-xs px-6 py-3.5 bg-gradient-to-r from-secondary/25 to-primary/25 border border-secondary text-secondary font-display font-bold text-xs uppercase tracking-wider rounded-xl glow-magenta hover:bg-secondary/35 hover:scale-105 active:scale-95 transition-all disabled:opacity-50"
+              className="flex items-center justify-center gap-2 w-full px-5 py-3.5 bg-gradient-to-r from-secondary/30 via-purple-600/30 to-secondary/30 border border-secondary text-secondary font-display font-bold text-xs uppercase tracking-wider rounded-xl glow-magenta apple-spring shadow-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-50"
             >
               <span>{isAdLoading ? "⏳ Requesting Ad..." : "📺 Revive & Continue (+1 Life)"}</span>
             </button>
           )}
 
           <button onClick={startGame}
-            className="mt-3 px-10 py-4 bg-primary text-primary-foreground font-display font-bold text-lg rounded-xl glow-cyan hover:scale-105 active:scale-95 transition-transform">
+            className="w-full py-3.5 px-6 bg-primary text-primary-foreground font-display font-bold text-base rounded-xl glow-cyan hover:scale-[1.02] active:scale-[0.98] transition-transform apple-spring shadow-lg">
             {copy.retry}
           </button>
           <button onClick={handleReturnToMenu}
-            className="px-6 py-2 font-display text-xs text-muted-foreground hover:text-foreground transition-colors">
+            className="px-6 py-1.5 font-display text-xs text-muted-foreground hover:text-foreground transition-colors">
             {copy.menu}
           </button>
         </div>
