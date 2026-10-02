@@ -16,6 +16,7 @@ import {
 import { platformManager, PLATFORM_REGISTRY } from "@/lib/platform/platformManager";
 import { PlatformId } from "@/lib/platform/types";
 import { getCopy, getPrompts, getTutorialSteps } from "@/lib/localization";
+import AuroraBackdrop from "@/components/AuroraBackdrop";
 
 declare global {
   interface Window {
@@ -845,6 +846,8 @@ export default function TapOrWaitGame() {
       className={`game-shell fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden transition-transform duration-75 ${screenShake ? "animate-shake" : ""} ${settings.reducedMotion ? "reduce-motion" : ""} ${settings.highContrast ? "high-contrast" : ""}`}
       onPointerDown={phase === "playing" && !isPlatformPaused ? handleTap : undefined}
     >
+      {/* WebGL Aurora Shader Backdrop */}
+      <AuroraBackdrop phase={phase} reducedMotion={settings.reducedMotion} />
       {/* Retro grid background */}
       <div className="retro-grid" />
       <div className="sr-only" aria-live="polite">
