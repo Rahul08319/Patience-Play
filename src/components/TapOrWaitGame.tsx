@@ -15,6 +15,7 @@ import {
 import { platformManager } from "@/lib/platform/platformManager";
 import { getCopy, getPrompts, getTutorialSteps } from "@/lib/localization";
 import AuroraBackdrop from "@/components/AuroraBackdrop";
+import { soundEngine } from "@/lib/soundEngine";
 
 declare global {
   interface Window {
@@ -31,6 +32,7 @@ type TutorialStep = 0 | 1 | 2 | 3 | 4;
 type PowerUpType = "time_freeze" | "double_points" | "extra_life";
 
 interface GameSettings {
+  music: boolean;
   sound: boolean;
   haptics: boolean;
   scanlineIntensity: number; // 0-100 (0 = off)
@@ -39,7 +41,15 @@ interface GameSettings {
   accessibleCues: boolean;
 }
 
-const DEFAULT_SETTINGS: GameSettings = { sound: true, haptics: true, scanlineIntensity: 60, reducedMotion: false, highContrast: false, accessibleCues: true };
+const DEFAULT_SETTINGS: GameSettings = {
+  music: true,
+  sound: true,
+  haptics: true,
+  scanlineIntensity: 60,
+  reducedMotion: false,
+  highContrast: false,
+  accessibleCues: true,
+};
 
 function loadSettings(): GameSettings {
   try {
@@ -49,6 +59,9 @@ function loadSettings(): GameSettings {
     // Migrate old boolean `scanlines`
     if (typeof parsed.scanlines === "boolean" && parsed.scanlineIntensity == null) {
       parsed.scanlineIntensity = parsed.scanlines ? 60 : 0;
+    }
+    if (parsed.music == null) {
+      parsed.music = true;
     }
     return { ...DEFAULT_SETTINGS, ...parsed };
   } catch { return DEFAULT_SETTINGS; }
@@ -142,71 +155,8 @@ function vibrate(pattern: number | number[]) {
 
 let currentSettings: GameSettings = loadSettings();
 
-function playSound(type: "success" | "fail" | "tap" | "combo" | "powerup") {
-  if (!currentSettings.sound) return;
-  try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    if (currentSettings.accessibleCues) {
-      const tones = { success: 740, fail: 180, tap: 960, combo: 1120, powerup: 640 };
-      osc.type = type === "fail" ? "square" : "sine";
-      osc.frequency.setValueAtTime(tones[type], ctx.currentTime);
-      gain.gain.setValueAtTime(0.16, ctx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
-      osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.18);
-      return;
-    }
-    switch (type) {
-      case "success":
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(523, ctx.currentTime);
-        osc.frequency.setValueAtTime(659, ctx.currentTime + 0.08);
-        osc.frequency.setValueAtTime(784, ctx.currentTime + 0.16);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.35);
-        break;
-      case "fail":
-        osc.type = "sawtooth";
-        osc.frequency.setValueAtTime(200, ctx.currentTime);
-        osc.frequency.exponentialRampToValueAtTime(80, ctx.currentTime + 0.4);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.4);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.4);
-        break;
-      case "tap":
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, ctx.currentTime);
-        gain.gain.setValueAtTime(0.08, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.06);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.06);
-        break;
-      case "combo":
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(784, ctx.currentTime);
-        osc.frequency.setValueAtTime(988, ctx.currentTime + 0.06);
-        osc.frequency.setValueAtTime(1175, ctx.currentTime + 0.12);
-        gain.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.25);
-        break;
-      case "powerup":
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(440, ctx.currentTime);
-        osc.frequency.setValueAtTime(660, ctx.currentTime + 0.05);
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.1);
-        osc.frequency.setValueAtTime(1320, ctx.currentTime + 0.15);
-        gain.gain.setValueAtTime(0.15, ctx.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
-        osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.3);
-        break;
-    }
-  } catch {
-    logHealthWarning();
-  }
+function playSound(type: "success" | "fail" | "tap" | "combo" | "powerup" | "countdown" | "countdown_go") {
+  soundEngine.playSound(type);
 }
 
 interface Particle {
@@ -507,6 +457,7 @@ export default function TapOrWaitGame() {
   }, [showNotice]);
 
   const startGame = () => {
+    soundEngine.unlock();
     setScore(0); setRound(0); setCombo(0); setMaxCombo(0);
     setShowNameInput(false); setActivePowerUps([]); setPowerUpPickups([]);
     setExtraLives(0); setPowerUpNotice(null);
@@ -534,8 +485,27 @@ export default function TapOrWaitGame() {
   // Persist local settings and mirror the player profile to YouTube cloud saves.
   useEffect(() => {
     currentSettings = { ...settings, sound: settings.sound && platformAudioEnabled };
+    soundEngine.setMusicEnabled(settings.music && platformAudioEnabled);
+    soundEngine.setSoundEnabled(settings.sound && platformAudioEnabled);
+    soundEngine.setAccessibleCues(settings.accessibleCues);
+    soundEngine.setPlatformMuted(!platformAudioEnabled);
     localStorage.setItem("tapOrWait_settings", JSON.stringify(settings));
   }, [settings, platformAudioEnabled]);
+
+  useEffect(() => {
+    soundEngine.setGamePaused(isPlatformPaused);
+  }, [isPlatformPaused]);
+
+  // Sync music themes across game phases
+  useEffect(() => {
+    if (phase === "playing") {
+      soundEngine.playTheme("gameplay");
+    } else if (phase === "gameover") {
+      soundEngine.playTheme("silent");
+    } else if (phase === "menu" || phase === "settings" || phase === "leaderboard" || phase === "tutorial") {
+      soundEngine.playTheme("menu");
+    }
+  }, [phase]);
 
   useEffect(() => {
     const data = { version: 1 as const, settings, highScore, leaderboard, endlessLeaderboard, dailyLeaderboard };
@@ -550,6 +520,7 @@ export default function TapOrWaitGame() {
   useEffect(() => {
     if (phase !== "countdown" || isPlatformPaused) return;
     if (countdown <= 0) { startRound(0); return; }
+    soundEngine.playSound(countdown === 1 ? "countdown_go" : "countdown");
     const t = setTimeout(() => setCountdown(c => c - 1), 700);
     return () => clearTimeout(t);
   }, [phase, countdown, isPlatformPaused]);
@@ -834,8 +805,27 @@ export default function TapOrWaitGame() {
     <div
       data-testid="game-shell"
       className={`game-shell fixed inset-0 flex flex-col items-center justify-center bg-background overflow-hidden transition-transform duration-75 ${screenShake ? "animate-shake" : ""} ${settings.reducedMotion ? "reduce-motion" : ""} ${settings.highContrast ? "high-contrast" : ""}`}
-      onPointerDown={phase === "playing" && !isPlatformPaused ? handleTap : undefined}
+      onPointerDown={() => {
+        soundEngine.unlock();
+        if (phase === "playing" && !isPlatformPaused) {
+          handleTap();
+        }
+      }}
     >
+      {/* Quick Audio Toggle Button */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          soundEngine.unlock();
+          setSettings(s => ({ ...s, music: !s.music }));
+        }}
+        className="absolute top-3.5 right-4 z-40 w-9 h-9 rounded-full apple-glass-card hover:bg-white/10 text-xs font-display text-muted-foreground hover:text-foreground transition-all apple-spring shadow-lg flex items-center justify-center cursor-pointer"
+        title={settings.music ? "Mute Music" : "Play Music"}
+        aria-label={settings.music ? "Mute Music" : "Play Music"}
+      >
+        <span>{settings.music ? "🎵" : "🔇"}</span>
+      </button>
+
       {/* WebGL Aurora Shader Backdrop */}
       <AuroraBackdrop phase={phase} reducedMotion={settings.reducedMotion} />
       {/* Retro grid background */}
@@ -1433,12 +1423,13 @@ export default function TapOrWaitGame() {
           </h2>
           <div className="w-full flex flex-col gap-3 mt-2">
             {([
-              { key: "sound", label: `🔊 ${copy.sound}`, desc: "Synth tones on actions" },
+              { key: "music", label: "🎵 Music (BGM)", desc: "Retro synthwave driving soundtrack" },
+              { key: "sound", label: `🔊 ${copy.sound}`, desc: "Tactile synth tones & clicks" },
               { key: "haptics", label: `📳 ${copy.haptics}`, desc: "Vibrate on tap & events" },
               { key: "reducedMotion", label: `◌ ${copy.reducedMotion}`, desc: "Stops screen shake and particle motion" },
               { key: "highContrast", label: `◐ ${copy.highContrast}`, desc: "Makes text and controls easier to see" },
               { key: "accessibleCues", label: `♫ ${copy.accessibleCues}`, desc: "Uses clear, distinct game tones" },
-            ] as { key: "sound" | "haptics" | "reducedMotion" | "highContrast" | "accessibleCues"; label: string; desc: string }[]).map(item => (
+            ] as { key: "music" | "sound" | "haptics" | "reducedMotion" | "highContrast" | "accessibleCues"; label: string; desc: string }[]).map(item => (
               <button
                 key={item.key}
                 onClick={() => setSettings(s => ({ ...s, [item.key]: !s[item.key] }))}
