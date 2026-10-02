@@ -6,15 +6,13 @@ import {
   logHealthError,
   logHealthWarning,
   notifyGameReady,
-  openYouTubeContent,
   requestInterstitialAd,
   requestRewardedAd,
   saveGameData,
   sendBestScore,
   subscribeToSystemEvents,
 } from "@/lib/youtubePlayables";
-import { platformManager, PLATFORM_REGISTRY } from "@/lib/platform/platformManager";
-import { PlatformId } from "@/lib/platform/types";
+import { platformManager } from "@/lib/platform/platformManager";
 import { getCopy, getPrompts, getTutorialSteps } from "@/lib/localization";
 import AuroraBackdrop from "@/components/AuroraBackdrop";
 
@@ -316,14 +314,6 @@ export default function TapOrWaitGame() {
   const [hasUsedRewardedRevive, setHasUsedRewardedRevive] = useState(false);
   const [isAdLoading, setIsAdLoading] = useState(false);
   const [powerUpNotice, setPowerUpNotice] = useState<string | null>(null);
-  const [activePlatform, setActivePlatform] = useState(() => platformManager.getActivePlatform());
-
-  const handleSwitchPlatform = (id: PlatformId) => {
-    platformManager.setPlatformOverride(id);
-    const updated = platformManager.getActivePlatform();
-    setActivePlatform(updated);
-    showNotice(`🕹️ Engine: ${updated.name}`);
-  };
 
   const particleIdRef = useRef(0);
   const pickupIdRef = useRef(0);
@@ -931,30 +921,6 @@ export default function TapOrWaitGame() {
         />
       </div>
 
-      {/* Apple Dynamic Island Platform Indicator */}
-      <div
-        className="absolute top-3.5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 px-4 py-2 apple-glass-pill text-[11px] font-display text-muted-foreground tracking-wider cursor-pointer hover:border-primary/50 transition-all apple-spring shadow-xl apple-specular"
-        onClick={() => {
-          if (phase === "menu") setPhase("settings");
-        }}
-        title="Active Gaming Platform Engine (Click to open Settings & Switcher)"
-      >
-        <span className="w-2.5 h-2.5 rounded-full animate-pulse shadow-sm" style={{ backgroundColor: activePlatform.color }} />
-        <span className="text-foreground font-semibold flex items-center gap-1.5">
-          <span>{activePlatform.icon}</span>
-          <span>{activePlatform.shortName}</span>
-        </span>
-        <span className="opacity-25 text-white">|</span>
-        <span className="text-primary text-[10px] font-bold tracking-tight uppercase">
-          {activePlatform.hasAds ? "⚡ Monetized" : "🛡️ Native"}
-        </span>
-        {highScore > 0 && (
-          <>
-            <span className="opacity-25 text-white">|</span>
-            <span className="text-accent text-[10px] font-bold">🏆 {highScore}</span>
-          </>
-        )}
-      </div>
 
       {/* Header */}
       {(phase === "playing" || phase === "result") && (
@@ -1036,11 +1002,6 @@ export default function TapOrWaitGame() {
         <div className="menu-panel apple-glass apple-specular flex max-h-full flex-col items-center gap-3.5 overflow-y-auto px-5 py-6 md:px-7 md:py-7 z-10 max-w-md w-full my-auto shadow-2xl">
           {/* Header & Title */}
           <div className="flex flex-col items-center text-center">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/[0.04] border border-white/10 text-[10px] font-display text-muted-foreground tracking-widest mb-1.5">
-              <span>🍎 APPLE FLUID DESIGN</span>
-              <span>•</span>
-              <span className="text-primary font-bold">13 PLATFORMS</span>
-            </div>
             <h1 className="font-display font-black text-[clamp(2.3rem,11vw,4.5rem)] text-primary text-glow-cyan tracking-wider leading-none">
               {copy.title}
             </h1>
@@ -1523,46 +1484,6 @@ export default function TapOrWaitGame() {
               🌐 {copy.auto}: {locale}
             </div>
 
-            {/* Apple Platform Engine Switcher Bento Tile */}
-            <div className="flex flex-col gap-2.5 px-4 py-3.5 apple-glass-card border border-white/10">
-              <div className="flex items-center justify-between">
-                <div className="flex flex-col items-start">
-                  <span className="font-display font-bold text-xs text-foreground flex items-center gap-1.5">
-                    <span>🕹️</span> <span>Platform Engine</span>
-                  </span>
-                  <span className="text-muted-foreground text-[10px]">Active SDK: {activePlatform.name}</span>
-                </div>
-                <span className="text-[10px] px-2 py-0.5 rounded-full font-bold bg-primary/20 text-primary border border-primary/40">
-                  {activePlatform.hasAds ? "Monetized" : "Native"}
-                </span>
-              </div>
-              <select
-                value={activePlatform.id}
-                onChange={(e) => handleSwitchPlatform(e.target.value as PlatformId)}
-                className="w-full mt-1 px-3 py-2 bg-background/80 border border-white/10 rounded-lg text-xs font-display text-foreground focus:outline-none focus:border-primary cursor-pointer"
-              >
-                {platformManager.getAllPlatforms().map((p) => (
-                  <option key={p.id} value={p.id} className="bg-zinc-900 text-foreground">
-                    {p.icon} {p.name}
-                  </option>
-                ))}
-              </select>
-              <div className="text-[9px] text-muted-foreground/90 font-display">
-                Zero third-party SDKs. 100% native platform engine.
-              </div>
-            </div>
-
-            <button
-              onClick={async () => {
-                const opened = await openYouTubeContent({ id: "youtube-gaming", contentType: "VIDEO" });
-                if (!opened) {
-                  window.open("https://youtube.com/gaming", "_blank");
-                }
-              }}
-              className="w-full px-4 py-3 bg-red-600/10 border border-red-500/30 text-red-400 hover:text-red-300 hover:bg-red-600/20 font-display text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-2 apple-spring"
-            >
-              <span>▶️ YouTube Playables Hub</span>
-            </button>
           </div>
 
           <div className="font-display text-[9px] tracking-wide text-muted-foreground/80">SPACE / ENTER TO TAP · F FOR FULLSCREEN</div>
